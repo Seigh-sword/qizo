@@ -65,7 +65,11 @@ report() {
 		fi
 		printf '\n'
 	} >".qizo-boot-$tag.probe"
-	printf '::%s::qizo %s: %s\n' "$sev" "$tag" "$(cat ".qizo-boot-$tag.probe" | clean)"
+	probe_sev=warning
+	if [ "$sev" = failure ]; then
+		probe_sev=error
+	fi
+	printf '::%s::qizo %s: %s\n' "$probe_sev" "$tag" "$(cat ".qizo-boot-$tag.probe" | clean)"
 }
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
 	qemu=qemu-system-x86_64
