@@ -86,7 +86,7 @@ bytes=${bytes:-0}
 
 if [ "$bytes" -eq 0 ]; then
 	echo "fail" >"$status"
-	fail "no serial output at all from $image, qemu said: $(tail -3 "$err" 2>/dev/null)"
+	fail "no serial output at all from $image, seabios: $(tail -c 320 "$bios" 2>/dev/null | tr -s ' ') || qemu: $(tail -2 "$err" 2>/dev/null)"
 	exit 1
 fi
 
