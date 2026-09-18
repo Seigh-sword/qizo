@@ -40,12 +40,35 @@ static void pic_init(void)
 	qizo_io_wait();
 }
 
-static u64 pit_cycles;
+static inline u64 qizo_cr2(void)
+{
+	u64 v;
+
+	__asm__ volatile("mov %%cr2, %0" : "=r"(v));
+	return v;
+}
+
+static void qizo_exception(struct qizo_regs *regs)
+{
+	u64 vector = regs->vector;
+	u64 fault = vector == 14 ? qizo_cr2() : 0;
+
+	qizo_cli();
+	qizo_trace("panic");
+	qizo_printf("qizo: cpu exception %u rip=%p code=%p cr2=%p\r\n",
+		    (u32)vector, regs->rip, regs->code, fault);
+	qizo_printf("qizo: faulting frame at %p, vector list in docs\r\n", (u64)(regs + 1));
+	qizo_halt();
+}
 
 void qizo_irq_handler(struct qizo_regs *regs)
 {
 	u64 vector = regs->vector;
 
+	if (vector < 32) {
+		qizo_exception(regs);
+		return;
+	}
 	if (vector == 32) {
 		ticks++;
 		return;
