@@ -11,6 +11,7 @@ status=".qizo-boot-$tag.status"
 log="serial-$tag.log"
 err="qemu-$tag.err"
 trace="qemu-$tag.trace"
+bios="bios-$tag.log"
 
 note() {
 	local text=$1
@@ -66,6 +67,7 @@ timeout "$timeout_s" "$qemu" \
 	-display none -monitor none -serial "file:$log" \
 	-no-reboot -no-shutdown \
 	-d int,cpu_reset,guest_errors -D "$trace" \
+	-debugcon "file:$bios" -global isa-debugcon.iobase=0x402 \
 	"${drive[@]}" 2>"$err" &
 pid=$!
 
@@ -98,7 +100,7 @@ fi
 
 if ! grep -qa "$expect" "$log"; then
 	echo "fail" >"$status"
-	fail "stopped before the shell, boot markers and last output: $(head -c 300 "$log" | tr -d '\0') || last: $(tail -c 200 "$log")"
+	fail "stopped before the shell, markers: $(head -c 200 "$log" | tr -d '\0') || last: $(tail -c 160 "$log") || seabios: $(tail -c 200 "$bios" 2>/dev/null | tr -s ' ')"
 	exit 1
 fi
 
