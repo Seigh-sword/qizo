@@ -13,20 +13,20 @@ err="qemu-$tag.err"
 trace="qemu-$tag.trace"
 bios="bios-$tag.log"
 
+clean() {
+	tr -d '\r' | tr '\n\t\0' '   ' | tr -cd ' -~' | cut -c1-700
+}
+
 note() {
-	local text=$1
-	text=${text//$'\r'/}
-	text=${text//$'\n'/ }
-	text=${text//%/%25}
-	printf '::notice::qizo %s: %s\n' "$tag" "${text:0:900}"
+	printf '::notice::qizo %s: %s\n' "$tag" "$(printf '%s' "$1" | clean)"
 }
 
 fail() {
-	local text=$1
-	text=${text//$'\r'/}
-	text=${text//$'\n'/ }
-	text=${text//%/%25}
-	printf '::error::qizo %s: %s\n' "$tag" "${text:0:900}"
+	printf '::error::qizo %s: %s\n' "$tag" "$(printf '%s' "$1" | clean)"
+}
+
+report() {
+	note "serial[$bytes]: $(head -c 300 "$log" 2>/dev/null) || tail: $(tail -c 200 "$log" 2>/dev/null) || bios: $(tail -c 200 "$bios" 2>/dev/null) || trace: $(tail -c 200 "$trace" 2>/dev/null)"
 }
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
@@ -86,7 +86,8 @@ bytes=${bytes:-0}
 
 if [ "$bytes" -eq 0 ]; then
 	echo "fail" >"$status"
-	fail "no serial output at all from $image, seabios: $(tail -c 320 "$bios" 2>/dev/null | tr -s ' ') || qemu: $(tail -2 "$err" 2>/dev/null)"
+	report
+	fail "no serial output at all from $image, qemu said: $(tail -2 "$err" 2>/dev/null)"
 	exit 1
 fi
 
@@ -94,13 +95,15 @@ cat "$log"
 
 if grep -qa 'panic' "$log"; then
 	echo "fail" >"$status"
+	report
 	fail "kernel panic: $(grep -a 'panic' "$log" | head -2)"
 	exit 1
 fi
 
 if ! grep -qa "$expect" "$log"; then
 	echo "fail" >"$status"
-	fail "stopped before the shell, markers: $(head -c 200 "$log" | tr -d '\0') || last: $(tail -c 160 "$log") || seabios: $(tail -c 200 "$bios" 2>/dev/null | tr -s ' ')"
+	report
+	fail "stopped before the shell, waiting for: $expect"
 	exit 1
 fi
 
