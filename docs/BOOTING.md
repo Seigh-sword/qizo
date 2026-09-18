@@ -150,3 +150,24 @@ error is on the screen, not the serial port). `E11` is A20, `E12` is no long mod
 `E14` is no memory map, `E16` is a bad blob, header or decompression. Set
 `QIZO_BOOT_TRACE` to `0` in `boot/qizoboot.inc` to drop the markers and reclaim
 about 200 bytes of stage two.
+
+## CPU exception report
+
+Every vector below 32 is a CPU exception and the kernel does not return from one:
+returning would run the faulting instruction again, fault again, and live-lock
+with nothing on the serial line but the last stage marker. Instead it prints
+
+    qizo: cpu exception <vector> rip=<addr> code=<err> cr2=<addr>
+
+and halts. `cr2` is the faulting address for a page fault (14) and zero for the
+rest. The vectors are the standard ones: 0 #de divide, 1 #db debug, 3 #bp
+breakpoint, 4 #of overflow, 5 #br bound range, 6 #ud invalid opcode, 7 #nm device
+not available, 8 #df double fault, 10 #ts invalid TSS, 11 #np segment not present,
+12 #ss stack segment, 13 #gp general protection, 14 #pf page fault, 16 #mf x87
+floating point, 17 #ac alignment check, 19 #simd SIMD floating point. The kernel
+is identity mapped from 0x100000, so `rip` names the function on its own:
+
+    nm build/qizo.elf | sort > /tmp/syms
+
+and the largest symbol at or below `rip` is where it faulted. No symbol table
+needs to live in the image.
