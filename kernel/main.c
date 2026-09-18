@@ -122,8 +122,7 @@ void qizo_calibrate(void)
 		if (b > a) {
 			a = b;
 			++ms;
-			if (ms == 1)
-				c1 = qizo_rdtsc();
+			c1 = qizo_rdtsc();
 		}
 	}
 	if (ms) {

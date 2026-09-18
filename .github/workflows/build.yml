@@ -73,6 +73,7 @@ jobs:
           if [ "$rc" -eq 2 ]; then rc=0; fi
           exit $rc
       - name: boot the iso in qemu
+        if: always()
         run: |
           rc=0
           bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso || rc=$?

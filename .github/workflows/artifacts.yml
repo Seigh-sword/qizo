@@ -33,6 +33,7 @@ jobs:
           exit $rc
 
       - name: boot the iso in qemu and capture the console
+        if: always()
         run: |
           rc=0
           bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso || rc=$?

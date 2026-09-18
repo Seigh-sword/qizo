@@ -32,16 +32,41 @@ probe() {
 }
 
 report() {
-	local seen last trace_lines
-	seen=$(probe stage1 "1:"; probe stage2 "2:"; probe handoff "PML6"; probe con "console up";
-		probe mem "memory up"; probe irq "irqs live"; probe cal "calibrating";
-		probe timer "timer"; probe rep "reporting"; probe shell "shell";
-		probe prompt "qizo>"; probe panic "panic")
-	last=$(tail -1 "$log" 2>/dev/null | tr -cd ' -~' | cut -c1-90)
-	trace_lines=$(wc -l <"$trace" 2>/dev/null | tr -d ' ')
-	fail "reached[$seen] bytes=$bytes trace=${trace_lines:-0} last[$last]"
+	local sev="$1" seen masks pat m
+	seen=""
+	masks="stage1 stage2 pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic"
+	for m in $masks; do
+		pat="$m"
+		case "$m" in
+			stage1) pat="1:" ;;
+			stage2) pat="2:" ;;
+			pm) pat="P" ;;
+			e820) pat="M" ;;
+			longmm) pat="L" ;;
+			jump6) pat="6" ;;
+			con) pat="console up" ;;
+			mem) pat="memory up" ;;
+			irq) pat="irqs live" ;;
+			cal) pat="calibrating" ;;
+			timer) pat="timer" ;;
+			rep) pat="reporting" ;;
+			shell) pat="shell" ;;
+			prompt) pat="qizo>" ;;
+			panic) pat="panic" ;;
+		esac
+		if grep -qa -- "$pat" "$log" 2>/dev/null; then
+			seen="$seen$m "
+		fi
+	done
+	{
+		printf 'qizo %s: reached[%s] bytes=%s trace=%s' "$tag" "${seen:-none}" "${bytes:-0}" "${tlen:-0}"
+		if [ -f "$err" ] && grep -qaE 'error|failed|unsupported' "$err" 2>/dev/null; then
+			printf ' qemuerr'
+		fi
+		printf '\n'
+	} >".qizo-boot-$tag.probe"
+	printf '::%s::qizo %s: %s\n' "$sev" "$tag" "$(cat ".qizo-boot-$tag.probe" | clean)"
 }
-
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
 	qemu=qemu-system-x86_64
 elif command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
@@ -96,26 +121,28 @@ wait "$pid" 2>/dev/null || true
 
 bytes=$(wc -c <"$log" 2>/dev/null | tr -d ' ')
 bytes=${bytes:-0}
+tlen=$(wc -l <"$trace" 2>/dev/null | tr -d ' ')
+tlen=${tlen:-0}
 
 if [ "$bytes" -eq 0 ]; then
 	echo "fail" >"$status"
-	report
+	report "failure"
 	fail "no serial output at all from $image, qemu said: $(tail -2 "$err" 2>/dev/null)"
 	exit 1
 fi
 
-cat "$log"
+sed -e 's/[^[:print:]]/./g' "$log" | tail -40
 
 if grep -qa 'panic' "$log"; then
 	echo "fail" >"$status"
-	report
+	report "failure"
 	fail "kernel panic: $(grep -a 'panic' "$log" | head -2)"
 	exit 1
 fi
 
 if ! grep -qa "$expect" "$log"; then
 	echo "fail" >"$status"
-	report
+	report "failure"
 	fail "stopped before the shell, waiting for: $expect"
 	exit 1
 fi
