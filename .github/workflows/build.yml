@@ -66,10 +66,18 @@ jobs:
         with:
           name: qizo-${{ github.sha }}
           path: .
-      - name: boot both images in qemu
+      - name: boot the disk image in qemu
         run: |
-          bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk
-          bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso
+          rc=0
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk || rc=$?
+          if [ "$rc" -eq 2 ]; then rc=0; fi
+          exit $rc
+      - name: boot the iso in qemu
+        run: |
+          rc=0
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso || rc=$?
+          if [ "$rc" -eq 2 ]; then rc=0; fi
+          exit $rc
       - name: summary
         if: always()
         run: |
@@ -87,8 +95,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qizo-serial
+          name: qizo-serial-${{ github.sha }}
           path: |
-            serial.log
             serial-disk.log
+            serial-iso.log
+            qemu-disk.err
+            qemu-iso.err
+            .qizo-boot-disk.status
+            .qizo-boot-iso.status
           if-no-files-found: warn

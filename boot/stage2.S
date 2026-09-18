@@ -12,6 +12,13 @@ _start:
 	movw %ax, %es
 	movw %ax, %ss
 	movw $0x8FF0, %sp
+.if QIZO_BOOT_TRACE
+	call qizo_com1_init
+	movb $0x32, %al
+	call qizo_trace_putc
+	movb $0x3A, %al
+	call qizo_trace_putc
+.endif
 
 	movl $QIZO_BOOTINFO_SEG, %eax
 	movw %ax, %es
@@ -124,6 +131,10 @@ e820_done:
 	andl $0x9FFFFFFF, %eax
 	orl $1, %eax
 	movl %eax, %cr0
+.if QIZO_BOOT_TRACE
+	movb $0x50, %al
+	call qizo_trace_putc
+.endif
 	ljmpl $0x08, $qizo_pm32
 
 print16:
@@ -142,6 +153,16 @@ halt16:
 
 .global qizo_fail16
 qizo_fail16:
+.if QIZO_BOOT_TRACE
+	pushw %ax
+	pushw %ds
+	movw $QIZO_BOOTINFO_SEG, %ax
+	movw %ax, %ds
+	movb QIZO_BI_ERR, %al
+	call qizo_trace_hex8
+	popw %ds
+	popw %ax
+.endif
 	movw %cs, %ax
 	movw %ax, %ds
 	movw $(qizo_msg - _start), %si
@@ -161,6 +182,86 @@ qizo_gdtr:
 	.word 55
 	.long QIZO_STAGE2 + (qizo_gdt - _start)
 
+
+.if QIZO_BOOT_TRACE
+qizo_com1_init:
+	pushw %ax
+	pushw %dx
+	movb $0x00, %al
+	movw $0x3F9, %dx
+	outb %al, %dx
+	movb $0x80, %al
+	movw $0x3FB, %dx
+	outb %al, %dx
+	movb $0x01, %al
+	movw $0x3F8, %dx
+	outb %al, %dx
+	movb $0x00, %al
+	movw $0x3F9, %dx
+	outb %al, %dx
+	movb $0x03, %al
+	movw $0x3FB, %dx
+	outb %al, %dx
+	movb $0xC7, %al
+	movw $0x3F2, %dx
+	outb %al, %dx
+	movb $0x0B, %al
+	movw $0x3FD, %dx
+	outb %al, %dx
+	popw %dx
+	popw %ax
+	ret
+
+qizo_trace_putc:
+	pushw %ax
+	pushw %cx
+	pushw %dx
+	movb %al, %ah
+	movw $60000, %cx
+	movw $0x3FD, %dx
+qizo_tr_wait:
+	inb %dx, %al
+	andb $0x20, %al
+	jnz qizo_tr_send
+	decw %cx
+	jnz qizo_tr_wait
+	jmp qizo_tr_done
+qizo_tr_send:
+	movb %ah, %al
+	movw $0x3F8, %dx
+	outb %al, %dx
+qizo_tr_done:
+	popw %dx
+	popw %cx
+	popw %ax
+	ret
+
+qizo_trace_hexnib:
+	andb $0x0F, %al
+	cmpb $10, %al
+	jb qizo_tr_dec
+	addb $0x37, %al
+	jmp qizo_tr_emit
+qizo_tr_dec:
+	addb $0x30, %al
+qizo_tr_emit:
+	call qizo_trace_putc
+	ret
+
+qizo_trace_hex8:
+	pushw %bx
+	movb %al, %bl
+	movb $0x45, %al
+	call qizo_trace_putc
+	movb %bl, %al
+	shrb $4, %al
+	call qizo_trace_hexnib
+	movb %bl, %al
+	call qizo_trace_hexnib
+	popw %bx
+	ret
+.endif
+
 qizo_msg:
 	.asciz "QIZO BOOT ERR "
 
@@ -169,6 +270,15 @@ qizo_msg:
 
 .global qizo_pm32
 qizo_pm32:
+.if QIZO_BOOT_TRACE
+	pushal
+	pushfl
+	movl $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %ecx
+	movb $0x4D, %al
+	call *%ecx
+	popfl
+	popal
+.endif
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %es
@@ -276,6 +386,15 @@ ram_done:
 	movl %cr0, %eax
 	orl $0x80000001, %eax
 	movl %eax, %cr0
+.if QIZO_BOOT_TRACE
+	pushal
+	pushfl
+	movl $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %ecx
+	movb $0x4C, %al
+	call *%ecx
+	popfl
+	popal
+.endif
 	ljmpl $0x28, $qizo_long64
 
 fail32:
@@ -293,6 +412,19 @@ fail32:
 
 .global qizo_long64
 qizo_long64:
+.if QIZO_BOOT_TRACE
+	pushq %rax
+	pushq %rcx
+	pushq %rdx
+	pushfq
+	movabsq $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %rcx
+	movb $0x36, %al
+	call *%rcx
+	popfq
+	popq %rdx
+	popq %rcx
+	popq %rax
+.endif
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %es

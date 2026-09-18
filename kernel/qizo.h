@@ -23,6 +23,8 @@ typedef unsigned long upage;
 #define QIZO_STACK_SIZE 32768
 #define QIZO_BSS_SIZE 32768
 
+#define QIZO_DEBUG 1
+
 #define QIZO_VERSION_MAJOR 0
 #define QIZO_VERSION_MINOR 1
 #define QIZO_VERSION_PATCH 0
@@ -44,6 +46,8 @@ u64 qizo_rdmsr(u32 msr);
 void qizo_wrmsr(u32 msr, u64 value);
 u64 qizo_rdtsc(void);
 void qizo_idt_install(void);
+void qizo_gdt_install(void);
+void qizo_trace(const char *stage);
 
 void qizo_kmain(struct qizo_bootinfo *info);
 void qizo_console_init(struct qizo_bootinfo *info);

@@ -15,6 +15,8 @@ qizo_kernel_entry:
 	movq %rdi, %rbx
 	movq $qizo_boot_stack + QIZO_STACK_BYTES, %rsp
 	xorq %rbp, %rbp
+	call qizo_gdt_install
+	call qizo_idt_install
 	call qizo_paging_setup
 	movq %rbx, %rdi
 	call qizo_kmain

@@ -26,10 +26,18 @@ jobs:
         run: bash tools/ci/build.sh
 
       - name: boot the disk in qemu and capture the console
-        run: bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk
+        run: |
+          rc=0
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk || rc=$?
+          if [ "$rc" -eq 2 ]; then rc=0; fi
+          exit $rc
 
       - name: boot the iso in qemu and capture the console
-        run: bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso
+        run: |
+          rc=0
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso || rc=$?
+          if [ "$rc" -eq 2 ]; then rc=0; fi
+          exit $rc
 
       - name: package the release assets
         run: bash tools/ci/publish.sh

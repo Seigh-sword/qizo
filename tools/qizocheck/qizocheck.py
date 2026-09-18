@@ -96,48 +96,52 @@ def check_iso(iso, image):
         if typ == 1:
             if rec[1:6] != b"CD001":
                 return fail("primary volume descriptor id")
-            root = rec[124:124 + 34]
-            if len(root) < 34 or root[0] < 34:
+            root = rec[156:156 + 34]
+            if len(root) < 34 or root[0] != 34:
                 return fail("root directory record malformed")
             seen["root_lba"] = struct.unpack_from("<I", root, 2)[0]
             seen["root_size"] = struct.unpack_from("<I", root, 10)[0]
-            seen["block"] = struct.unpack_from("<H", rec, 96)[0]
+            seen["block"] = struct.unpack_from("<H", rec, 128)[0]
+            if rec[693] != 1:
+                return fail("primary volume descriptor file structure version")
+            if struct.unpack_from("<H", rec, 120)[0] != 1:
+                return fail("primary volume descriptor volume set size")
+            if struct.unpack_from(">H", rec, 130) != struct.unpack_from("<H", rec, 128):
+                return fail("primary volume descriptor block size is not both-endian")
             if seen["block"] != S:
                 return fail("logical block size %d" % seen["block"])
             seen["blocks"] = struct.unpack_from("<I", rec, 80)[0]
-        elif typ == 0 and rec[1:5] == b"CD00":
-            catalog = struct.unpack_from("<I", rec, 38)[0]
+        elif typ == 0 and rec[1:6] == b"CD001":
+            if rec[7:30] != b"EL TORITO SPECIFICATION".ljust(23, b"\0"):
+                return fail("boot record volume descriptor id")
+            catalog = struct.unpack_from("<I", rec, 71)[0]
         lba += 1
     if seen.get("block") != S:
         return fail("no primary volume descriptor")
     if catalog is None:
         return fail("no el torito boot volume descriptor")
     cat = iso[catalog * S:catalog * S + S]
-    if cat[0] != 1 or cat[1] != 0xEF:
-        return fail("boot catalog signature")
-    want = (cat[0] + cat[1] + sum(cat[2:28])) & 0xFFFF
-    if struct.unpack_from("<H", cat, 28)[0] != want:
-        return fail("boot catalog checksum")
+    if cat[0] != 1 or cat[1] != 0:
+        return fail("boot catalog validation header")
     if cat[30] != 0x55 or cat[31] != 0xAA:
         return fail("boot catalog key")
-    if struct.unpack_from("<H", cat, 32)[0] != 1:
-        return fail("boot catalog entry count")
-    if cat[36:40] != b"\x56\x43\x01\x00":
-        return fail("boot catalog section id")
-    entry = cat[64:96]
-    if entry[0] != 0x88:
-        return fail("boot entry not bootable")
-    if entry[1] != 0:
-        return fail("boot entry is not a hard disk image")
     acc = 0
     for i in range(0, 32, 2):
-        acc = (acc + struct.unpack_from("<H", entry, i)[0]) & 0xFFFF
+        acc = (acc + struct.unpack_from("<H", cat, i)[0]) & 0xFFFF
     if acc:
-        return fail("boot entry checksum does not cancel")
+        return fail("boot catalog checksum does not cancel")
+    entry = cat[32:64]
+    if entry[0] != 0x88:
+        return fail("boot entry not bootable")
+    if entry[1] != 4:
+        return fail("boot entry is not a hard disk image")
+    if struct.unpack_from("<H", entry, 2)[0] != 0x07C0:
+        return fail("boot entry load segment")
+    if struct.unpack_from("<H", entry, 6)[0] != 4:
+        return fail("boot entry load size")
     file_lba = struct.unpack_from("<I", entry, 8)[0]
-    sectors = struct.unpack_from("<I", entry, 16)[0]
-    if sectors != (len(image) + 511) // 512:
-        return fail("boot entry sector count %d != %d" % (sectors, (len(image) + 511) // 512))
+    if file_lba * S + len(image) > len(iso):
+        return fail("boot image runs off the end of the iso")
     if iso[file_lba * S:file_lba * S + len(image)] != image:
         return fail("embedded image bytes differ")
     root_lba, root_size = seen["root_lba"], seen["root_size"]

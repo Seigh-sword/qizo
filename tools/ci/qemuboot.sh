@@ -6,8 +6,26 @@ cd "$(dirname "$0")/../.."
 image=${1:?usage: tools/ci/qemuboot.sh <image> [tag]}
 tag=${2:-console}
 timeout_s=${QIZO_BOOT_TIMEOUT:-75}
-expect=${QIZO_BOOT_EXPECT:-shell ready}
+expect=${QIZO_BOOT_EXPECT:-qizo> }
 status=".qizo-boot-$tag.status"
+log="serial-$tag.log"
+err="qemu-$tag.err"
+
+note() {
+	local text=$1
+	text=${text//$'\r'/}
+	text=${text//$'\n'/ }
+	text=${text//%/%25}
+	printf '::notice::qizo %s: %s\n' "$tag" "${text:0:900}"
+}
+
+fail() {
+	local text=$1
+	text=${text//$'\r'/}
+	text=${text//$'\n'/ }
+	text=${text//%/%25}
+	printf '::error::qizo %s: %s\n' "$tag" "${text:0:900}"
+}
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
 	qemu=qemu-system-x86_64
@@ -23,12 +41,17 @@ fi
 
 if [ -z "$qemu" ]; then
 	echo "skip" >"$status"
-	echo "qizo: qemu-system-x86_64 is not available, boot test skipped" >&2
+	note "qemu-system-x86_64 not available, boot test skipped"
 	exit 2
 fi
 
-log="serial-$tag.log"
-: >"$log"
+if [ ! -f "$image" ]; then
+	echo "fail" >"$status"
+	fail "missing image $image"
+	exit 1
+fi
+
+note "qemu $("$qemu" --version | head -1)"
 
 drive=()
 case "$image" in
@@ -37,10 +60,10 @@ case "$image" in
 esac
 
 timeout "$timeout_s" "$qemu" \
-	-machine pc -m 64 -smp 1 \
+	-machine pc -m 64 -smp 1 -cpu qemu64 \
 	-display none -monitor none -serial "file:$log" \
 	-no-reboot -no-shutdown \
-	"${drive[@]}" >/dev/null 2>&1 &
+	"${drive[@]}" 2>"$err" &
 pid=$!
 
 for _ in $(seq 1 "$timeout_s"); do
@@ -53,9 +76,12 @@ done
 kill "$pid" 2>/dev/null || true
 wait "$pid" 2>/dev/null || true
 
-if ! [ -s "$log" ]; then
+bytes=$(wc -c <"$log" 2>/dev/null | tr -d ' ')
+bytes=${bytes:-0}
+
+if [ "$bytes" -eq 0 ]; then
 	echo "fail" >"$status"
-	echo "qizo: $image produced no serial output at all" >&2
+	fail "no serial output at all from $image, qemu said: $(tail -3 "$err" 2>/dev/null)"
 	exit 1
 fi
 
@@ -63,17 +89,18 @@ cat "$log"
 
 if grep -qa 'panic' "$log"; then
 	echo "fail" >"$status"
-	echo "qizo: kernel panic while booting $image" >&2
+	fail "kernel panic: $(grep -a 'panic' "$log" | head -2)"
 	exit 1
 fi
 
 if ! grep -qa "$expect" "$log"; then
 	echo "fail" >"$status"
-	echo "qizo: $image never printed '$expect'" >&2
+	fail "stopped before the shell, boot markers and last output: $(head -c 300 "$log" | tr -d '\0') || last: $(tail -c 200 "$log")"
 	exit 1
 fi
 
 echo "ok" >"$status"
-printf 'qizo: %s booted to the shell, %s serial lines, marker "%s" found\n' \
-	"$image" "$(wc -l <"$log" | tr -d ' ')" "$expect"
+note "$bytes serial bytes, booted to the shell"
+printf 'qizo: %s booted, %s serial bytes, marker "%s" found\n' \
+	"$image" "$bytes" "$expect"
 exit 0

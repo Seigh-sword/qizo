@@ -57,9 +57,9 @@ def build_iso(image, out, volume="QIZO"):
     file_sectors = len(payload) // SECTOR
 
     root_body = bytearray()
-    root_body += dir_record(ROOT_LBA, 0, 1 | 2, b"\0")
-    root_body += dir_record(ROOT_LBA, 0, 1 | 2, b"\1")
-    root_body += dir_record(FILE_LBA, len(image), 5, FILE_NAME.encode())
+    root_body += dir_record(ROOT_LBA, 0, 2, b"\0")
+    root_body += dir_record(ROOT_LBA, 0, 2, b"\1")
+    root_body += dir_record(FILE_LBA, len(image), 0, FILE_NAME.encode())
     root_body += b"\0" * (SECTOR - len(root_body) % SECTOR)
     root_sectors = len(root_body) // SECTOR
     total = FILE_LBA + file_sectors
@@ -68,39 +68,39 @@ def build_iso(image, out, volume="QIZO"):
     pvd[0] = 1
     pvd[1:6] = b"CD001"
     pvd[6] = 1
-    pvd[8:40] = b" " * 32
+    pvd[8:40] = b"QIZO".ljust(32, b" ")
     pvd[40:72] = volume.encode()[:32].ljust(32, b" ")
     pvd[80:88] = both32(total)
-    pvd[88:92] = both16(1)
-    pvd[92:96] = both16(1)
-    pvd[96:100] = both16(SECTOR)
-    pvd[100:108] = both32(0)
-    pvd[108:112] = struct.pack("<I", 0)
-    pvd[112:116] = struct.pack("<I", 0)
-    pvd[116:120] = struct.pack("<I", 0)
-    pvd[120:124] = struct.pack("<I", 0)
-    root_rec = dir_record(ROOT_LBA, len(root_body), 1 | 2, b"\0")
-    pvd[124:124 + len(root_rec)] = root_rec
-    text_field(pvd, 158, 128, "QIZO")
-    text_field(pvd, 286, 128, "ARENA AI AGENT MODE")
-    text_field(pvd, 414, 128, "ARENA AI AGENT MODE")
-    text_field(pvd, 542, 128, "QIZO MKQIZOISO")
-    for off in (670, 707, 744):
-        text_field(pvd, off, 37, "")
-    for off in (781, 798, 815, 832):
+    pvd[120:124] = both16(1)
+    pvd[124:128] = both16(1)
+    pvd[128:132] = both16(SECTOR)
+    pvd[132:140] = both32(0)
+    pvd[140:144] = struct.pack("<I", 0)
+    pvd[144:148] = struct.pack("<I", 0)
+    pvd[148:152] = struct.pack("<I", 0)
+    pvd[152:156] = struct.pack("<I", 0)
+    root_rec = dir_record(ROOT_LBA, len(root_body), 2, b"\0")
+    pvd[156:156 + len(root_rec)] = root_rec
+    text_field(pvd, 190, 128, "QIZO")
+    text_field(pvd, 318, 128, "ARENA AI AGENT MODE")
+    text_field(pvd, 446, 128, "ARENA AI AGENT MODE")
+    for off in (582, 619, 656):
+        pvd[off] = 0
+    pvd[693] = 1
+    text_field(pvd, 702, 32, "QIZO MKQIZOISO")
+    text_field(pvd, 734, 32, "ARENA AI AGENT MODE")
+    text_field(pvd, 766, 32, "SEIGH-SWORD")
+    text_field(pvd, 798, 32, "SURIEWEPEDI")
+    for off in (830, 847, 864, 881):
         pvd[off:off + 17] = DATE
-    pvd[881] = 1
-    pvd[882] = 0
-    pvd[883:1395] = b" " * 512
-    pvd[1395:SECTOR] = b"\0" * (SECTOR - 1395)
+    pvd[898:SECTOR] = b"\0" * (SECTOR - 898)
 
     brvd = bytearray(SECTOR)
     brvd[0] = 0
-    brvd[1:5] = b"CD00"
-    brvd[5] = 1
-    brvd[6:38] = b"EL TORITO SPECIFICATION".ljust(32, b" ")
-    struct.pack_into("<I", brvd, 38, CATALOG_LBA)
-    struct.pack_into("<I", brvd, 7, 0)
+    brvd[1:6] = b"CD001"
+    brvd[6] = 1
+    brvd[7:39] = b"EL TORITO SPECIFICATION".ljust(32, b"\0")
+    struct.pack_into("<I", brvd, 71, CATALOG_LBA)
 
     terminator = bytearray(SECTOR)
     terminator[0] = 255
@@ -109,37 +109,27 @@ def build_iso(image, out, volume="QIZO"):
 
     entry = bytearray(32)
     entry[0] = 0x88
-    entry[1] = 0
-    entry[2:4] = struct.pack("<H", 0x07C0)
+    entry[1] = 4
+    struct.pack_into("<H", entry, 2, 0x07C0)
     entry[4] = 0
     entry[5] = 0
-    entry[6:8] = struct.pack("<H", 0)
-    entry[8:12] = struct.pack("<I", FILE_LBA)
-    entry[12:16] = struct.pack("<I", 0)
-    entry[16:20] = struct.pack("<I", (len(image) + 511) // 512)
-    entry[20] = 0
-    entry[21] = 0
-    entry[22:24] = struct.pack("<H", 0)
-    entry[24:26] = struct.pack("<H", 0)
-    entry[26:32] = b"\0" * 6
-    acc = 0
-    for i in range(0, 32, 2):
-        if i == 22:
-            continue
-        acc = (acc + struct.unpack_from("<H", entry, i)[0]) & 0xFFFF
-    entry[22:24] = struct.pack("<H", (-acc) & 0xFFFF)
+    struct.pack_into("<H", entry, 6, 4)
+    struct.pack_into("<I", entry, 8, FILE_LBA)
+    struct.pack_into("<I", entry, 12, 0)
 
     cat = bytearray(SECTOR)
     cat[0] = 0x01
-    cat[1] = 0xEF
-    cat[2:28] = b"QIZO".ljust(26, b" ")
+    cat[1] = 0
+    cat[4:28] = b"QIZO MKQIZOISO".ljust(24, b"\0")
     cat[30] = 0x55
     cat[31] = 0xAA
-    cat[32:34] = struct.pack("<H", 1)
-    cat[34:36] = struct.pack("<H", 0)
-    cat[36:40] = b"\x56\x43\x01\x00"
-    cat[64:64 + 32] = bytes(entry)
-    struct.pack_into("<H", cat, 28, (cat[0] + cat[1] + sum(cat[2:28])) & 0xFFFF)
+    acc = 0
+    for i in range(0, 32, 2):
+        if i == 28:
+            continue
+        acc = (acc + struct.unpack_from("<H", cat, i)[0]) & 0xFFFF
+    struct.pack_into("<H", cat, 28, (-acc) & 0xFFFF)
+    cat[32:64] = bytes(entry)
 
     out_bytes = bytearray()
     out_bytes += b"\0" * (PVD_LBA * SECTOR)

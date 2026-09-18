@@ -33,6 +33,7 @@ qizo_stub_table:
 qizo_stub_end:
 
 qizo_isr_common:
+	fxsave qizo_fp_area(%rip)
 	pushq %rax
 	pushq %rbx
 	pushq %rcx
@@ -53,6 +54,7 @@ qizo_isr_common:
 	call qizo_irq_handler
 	movq %rsp, %rdi
 	call qizo_irq_eoi
+	fxrstor qizo_fp_area(%rip)
 	popq %r15
 	popq %r14
 	popq %r13
@@ -82,8 +84,44 @@ qizo_idt_ptr:
 	.word 256 * 16 - 1
 	.quad qizo_idt
 
+.balign 16
+qizo_gdt:
+	.quad 0
+	.quad 0x0020980000000000
+	.quad 0x0000920000000000
+	.quad 0x0020FA0000000000
+	.quad 0x0000F20000000000
+qizo_gdt_end:
+
+qizo_gdt_ptr:
+	.word qizo_gdt_end - qizo_gdt - 1
+	.quad qizo_gdt
+
+.balign 16
+qizo_fp_area:
+	.skip 512
+
 .section .qizo_text,"ax"
 .code64
+
+.global qizo_gdt_install
+.type qizo_gdt_install, @function
+qizo_gdt_install:
+	leaq qizo_gdt_ptr(%rip), %rax
+	lgdt (%rax)
+	movw $0x10, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	movw %ax, %ss
+	movw %ax, %fs
+	movw %ax, %gs
+	leaq qizo_gdt_reload(%rip), %rax
+	pushq $0x08
+	pushq %rax
+	lretq
+qizo_gdt_reload:
+	ret
+.size qizo_gdt_install, . - qizo_gdt_install
 
 .global qizo_idt_install
 .type qizo_idt_install, @function
@@ -103,7 +141,7 @@ qizo_idt_install:
 	movw %ax, 8(%rdi)
 	shrl $32, %eax
 	movl %eax, 10(%rdi)
-	movl $0, 14(%rdi)
+	movw $0, 14(%rdi)
 	addq $16, %rdi
 	addq $16, %rsi
 	movq %rsi, %rax

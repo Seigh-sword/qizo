@@ -50,6 +50,12 @@ static void serial_putc(char c)
 		qizo_outb(COM1 + 0, 0x0D);
 }
 
+static void serial_puts(const char *s)
+{
+	while (*s)
+		serial_putc(*s++);
+}
+
 static void serial_write(const char *data, size_t len)
 {
 	size_t i;
@@ -167,6 +173,20 @@ void qizo_console_init(struct qizo_bootinfo *info)
 		cursor_update();
 	install_font(qizo_font_data);
 }
+
+#if QIZO_DEBUG
+void qizo_trace(const char *stage)
+{
+	serial_puts("qizo: ");
+	serial_puts(stage);
+	serial_puts("\r\n");
+}
+#else
+void qizo_trace(const char *stage)
+{
+	(void)stage;
+}
+#endif
 
 void qizo_console_write(const char *data, size_t len)
 {
