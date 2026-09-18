@@ -44,12 +44,12 @@ Serial output and the VGA text console show the same shell. `help` lists the com
 
 ```
 LBA 0        stage1 (MBR, 448 byte budget)      boot/qizo/stage1.S
-LBA 16       stage2 code (4 KiB, 0xA0000)       boot/qizo/stage2.S
+LBA 16       stage2 code (4 KiB, 0x20000)       boot/qizo/stage2.S
 LBA 24       module blob (LZSS + adler32)       tools/mkqizoimg
 LBA 58+      FAT volume (read-only, README + KERNEL.BIN)
 ```
 
-stage1 loads `[stage2 | blob]` with INT 13h extended reads, jumps to 0xA0000. stage2 enables
+stage1 loads `[stage2 | blob]` with INT 13h extended reads, jumps to 0x20000. stage2 enables
 A20, reads the E820 map, checks the adler32 of the blob, decompresses the kernel with an
 in-place LZSS decoder, verifies the module header, drops into protected mode, builds 2 MiB
 page tables, flips into long mode and jumps to the kernel with a bootinfo block. The kernel

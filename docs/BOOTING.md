@@ -9,8 +9,8 @@ Everything below is fixed by `boot/qizoboot.inc`. The same file generates
 |---|---|
 | 0 | stage1 (MBR). Code ends by LBA0+464, args at 0x1D0, signature at 0x1FE |
 | 1..15 | MBR partition table region (partition 1 starts at LBA 58) |
-| 16..23 | stage2, loaded at 0xA0000, exactly 4 KiB of room |
-| 24..24+n | module blob: LZSS container, loaded at 0xA1000 |
+| 16..23 | stage2, loaded at 0x20000, exactly 4 KiB of room |
+| 24..24+n | module blob: LZSS container, loaded at 0x21000 |
 | 58+ | FAT16 volume, `README.TXT` and `KERNEL.BIN` for inspection only |
 
 The blob region is deliberately *before* the partition, so the filesystem never has to
@@ -19,9 +19,9 @@ resist the loader's own bytes, and the loader never touches a filesystem.
 ## stage1
 
 Boot sector loaded at 0x7C00. It saves the drive number, then reads `total` sectors from
-LBA `lba` into 0xA0000 using INT 13h AH=42h in chunks of at most 64 sectors, advancing the
+LBA `lba` into 0x20000 using INT 13h AH=42h in chunks of at most 64 sectors, advancing the
 destination segment by 2048 paragraphs per chunk. On read failure it prints
-`QIZO STAGE1 DISK ERR` through INT 10h teletype and halts. Then `ljmp $0xA000, $0`.
+`QIZO STAGE1 DISK ERR` through INT 10h teletype and halts. Then `ljmp $0x2000, $0`.
 
 The four patched words in the MBR (written by `tools/mkqizoimg`):
 
@@ -36,12 +36,12 @@ The four patched words in the MBR (written by `tools/mkqizoimg`):
 
 ## stage2
 
-Runs at 0xA0000 in real mode first:
+Runs at 0x20000 in real mode first:
 
 1. writes the bootinfo block at 0x10000,
 2. tests A20, enables it through port 0x92 if the gate is closed, fails the boot otherwise,
 3. checks CPUID availability and long mode (`0x80000001:EDX[29]`),
-4. collects up to 32 E820 entries into 0xD0000 with `INT 15h E820`, failing if the BIOS
+4. collects up to 32 E820 entries into 0x41000 with `INT 15h E820`, failing if the BIOS
    returns nothing,
 5. loads the GDT (flat 32-bit code/data, flat 64-bit code/data, user segments), sets CR0.PE,
    and far jumps into 32-bit mode.
@@ -110,16 +110,25 @@ bit clear means a literal byte.
 |---|---|
 | 0x7C00..0x7DFF | stage1 and its 512 byte sector |
 | 0x10000..0x106FF | bootinfo |
-| 0xA0000..0xA0FFF | stage2 code |
-| 0xA1000.. | blob, up to 124 KiB |
-| 0xD0000 | E820 scratch, 0xD0300 count |
-| 0xD3000 | stage2 protected mode stack top |
+| 0x20000..0x20FFF | stage2 code |
+| 0x21000.. | blob, up to 124 KiB |
+| 0x41000 | E820 scratch, 0x41300 count |
+| 0x44000 | stage2 protected mode stack top |
 | 0x100000 | kernel load address (identity mapped, 128 KiB budget) |
 | 0x180000 | decompression scratch |
 | 0x300000 | stage2 page tables (PML4 + PDPT) |
 
+Nothing may be loaded between 0xA0000 and 0xFFFFF. 0xA0000..0xBFFFF is the planar VGA
+frame buffer and 0xC0000..0xEFFFF is the video BIOS and option ROM shadow, so code placed
+there is written to the graphics card and read back as display memory, and the region above
+0x9FC00 belongs to the extended BIOS data area. The load area therefore sits at 0x20000,
+inside ordinary conventional RAM, clear of the IVT, the BIOS data area, the MBR and the
+EBDA, and it still leaves the whole first megabyte reserved by the frame allocator.
+
 `tools/qizocheck/qizobootmodel.py` re-runs the whole chain in Python against the built image
-and fails if any region overlaps, so these numbers stay honest.
+and fails if any region overlaps, so these numbers stay honest. It cannot catch a load
+address that is only *shadowed*, so `tools/ci/qemuboot.sh` boots the image under qemu and
+waits for the `qizo> ` prompt, which is the test that found this one.
 
 ## Boot markers
 
