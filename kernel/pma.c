@@ -91,8 +91,7 @@ void qizo_pma_init(struct qizo_bootinfo *info)
 			continue;
 		mark_range(base, len - base, 1);
 	}
-	mark_range(0, 4096, 0);
-	mark_range(640 * 1024, 768 * 1024, 0);
+	mark_range(0, 1024 * 1024, 0);
 	kernel_end = (u64)__qizo_bss_end - (u64)__qizo_phys_base + (u64)__qizo_phys_base;
 	if (info && info->kernel_total)
 		kernel_end = info->ktext + info->kernel_total;

@@ -10,14 +10,21 @@ import qizolzss
 import qizolayout as LY
 import qizoartifacts as ART
 
-SECTOR = 512
-STAGE1_ARGS = 0x1D0
-BLOB_BASE = 0xA0000
-BLOB_PHYS = 0xA1000
-SCRATCH = 0x140000
-KTEXT = 0x100000
-QIZOK_MAGIC = 0x4B4F5A49
-LZSS_MAGIC = 0x51495A4C
+SECTOR = LY.SECTOR
+STAGE1_ARGS = LY.STAGE1_ARGS_OFF
+SCRATCH = LY.SCRATCH
+KTEXT = LY.KTEXT
+QIZOK_MAGIC = LY.QIZOK_MAGIC
+LZSS_MAGIC = LY.LZSS_MAGIC
+BLOB_PHYS = LY.BLOB_PHYS
+BLOB_BASE = LY.STAGE2
+STAGE2 = LY.STAGE2
+STAGE2_BYTES = LY.STAGE2_BYTES
+E820_BUF = LY.E820_BUF
+PM_STACK = LY.PM_STACK
+BOOTINFO = LY.BOOTINFO
+BOOTINFO_SIZE = LY.BOOTINFO_SIZE
+PAGE_PML4 = LY.PAGE_PML4
 
 
 def fail(msg):
@@ -228,10 +235,18 @@ def main():
           (klen, entry, len(blob), 100.0 * len(blob) / (klen + 64)))
     if klen > 0x20000:
         return fail("kernel oversized")
-    if BLOB_PHYS + len(blob) > SCRATCH:
-        return fail("blob overlaps decompression scratch")
-    if KTEXT + klen + 0x10000 > BLOB_PHYS:
-        pass
+    if BLOB_PHYS + len(blob) > E820_BUF:
+        return fail("blob overlaps the e820 buffer")
+    if E820_BUF + LY.E820_MAX * LY.E820_ENT + 4 > PM_STACK - 0x1000:
+        return fail("e820 buffer crowds the 32 bit stack")
+    if STAGE2 + STAGE2_BYTES > BLOB_PHYS:
+        return fail("stage2 code region does not end before the blob")
+    if KTEXT + total_len > SCRATCH:
+        return fail("kernel image and bss reach the decompression scratch")
+    if SCRATCH + total_len > PAGE_PML4:
+        return fail("decompression scratch reaches the page tables")
+    if BOOTINFO + BOOTINFO_SIZE > STAGE2:
+        return fail("bootinfo reaches the stage2 load area")
     rc = check_fs(img, kernel, args.stage2)
     if rc:
         return rc

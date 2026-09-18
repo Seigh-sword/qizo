@@ -10,7 +10,10 @@ _start:
 .if QIZO_BOOT_TRACE
 	call qizo_com1_init
 	movb $0x31, %al
-	outb %al, $0x3F8
+	movw $0x3F8, %dx
+	outb %al, %dx
+	movb $0x3A, %al
+	outb %al, %dx
 .endif
 	xorw %ax, %ax
 	movw %ax, %ds
@@ -34,7 +37,7 @@ chunk_set:
 	movw %ax, QIZO_DAP_ADDR + 2
 	movw $0, QIZO_DAP_ADDR + 4
 	movw %bx, %ax
-	shlw $11, %ax
+	shlw $5, %ax
 	addw $QIZO_STAGE2_SEG, %ax
 	movw %ax, QIZO_DAP_ADDR + 6
 	movl QIZO_ARG_ADDR + QIZO_ARG_LBA, %eax
@@ -51,7 +54,8 @@ chunk_set:
 read_ok:
 .if QIZO_BOOT_TRACE
 	movb $0x52, %al
-	outb %al, $0x3F8
+	movw $0x3F8, %dx
+	outb %al, %dx
 .endif
 	movw QIZO_DAP_ADDR + 2, %ax
 	addw %ax, %bx
@@ -60,14 +64,16 @@ read_ok:
 go_stage2:
 .if QIZO_BOOT_TRACE
 	movb $0x4A, %al
-	outb %al, $0x3F8
+	movw $0x3F8, %dx
+	outb %al, %dx
 .endif
 	ljmp $QIZO_STAGE2_SEG, $0
 
 boot_fail:
 .if QIZO_BOOT_TRACE
 	movb $0x45, %al
-	outb %al, $0x3F8
+	movw $0x3F8, %dx
+	outb %al, %dx
 .endif
 	movw $(qizo_fail_msg - _start), %si
 	xorw %bx, %bx
@@ -92,18 +98,24 @@ qizo_fail_msg:
 
 .if QIZO_BOOT_TRACE
 qizo_com1_init:
+	movw $0x3FB, %dx
 	movb $0x83, %al
-	outb %al, $0x3FB
+	outb %al, %dx
+	movw $0x3F8, %dx
 	movb $0x01, %al
-	outb %al, $0x3F8
+	outb %al, %dx
+	movw $0x3F9, %dx
 	movb $0x00, %al
-	outb %al, $0x3F9
+	outb %al, %dx
+	movw $0x3FB, %dx
 	movb $0x03, %al
-	outb %al, $0x3FB
+	outb %al, %dx
+	movw $0x3F2, %dx
 	movb $0xC7, %al
-	outb %al, $0x3F2
+	outb %al, %dx
+	movw $0x3FD, %dx
 	movb $0x0B, %al
-	outb %al, $0x3FD
+	outb %al, %dx
 	ret
 .endif
 

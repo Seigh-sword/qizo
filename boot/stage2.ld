@@ -1,7 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {
-	. = 0xA0000;
+	. = 0x20000;
 	__qizo_base = .;
 	.qizo_boot : { *(.qizo_boot) }
 	.qizo_pm32 : { *(.qizo_pm32) }

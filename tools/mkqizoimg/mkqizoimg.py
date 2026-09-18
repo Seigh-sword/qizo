@@ -193,7 +193,8 @@ def main():
     args = ap.parse_args()
 
     stage1 = bytearray(ART.read(args.stage1))
-    if bytes(stage1[0x1D0:0x1E4]) != b"\0" * 20:
+    args_off = LY.STAGE1_ARGS_OFF
+    if bytes(stage1[args_off:args_off + 20]) != b"\0" * 20:
         raise SystemExit("qizo: stage1 argument block is not clear")
     if len(stage1) < 512:
         stage1 += bytearray(512 - len(stage1))
