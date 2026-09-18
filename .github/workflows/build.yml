@@ -1,0 +1,94 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: kernel, image, iso
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: toolchain and venv
+        run: bash tools/ci/bootstrap.sh
+
+      - name: build
+        run: bash tools/ci/build.sh
+
+      - name: boot chain and artifact audit
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+          python tools/qizocheck/qizocheck.py \
+            --image build/artifacts/qizo.img \
+            --iso build/artifacts/qizo.iso \
+            --stage1 build/boot/stage1.bin \
+            --stage2 build/boot/stage2.bin \
+            --kernel-elf build/qizo.elf
+          python tools/qizocheck/qizobootmodel.py \
+            --image build/artifacts/qizo.img \
+            --kernel-bin build/qizo.bin
+
+      - name: repository hygiene
+        run: bash tools/ci/hygiene.sh
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qizo-${{ github.sha }}
+          path: |
+            build/artifacts/qizo.img
+            build/artifacts/qizo.iso
+            build/artifacts/qizo.img.xz
+            build/artifacts/qizo.iso.xz
+            build/artifacts/qizo.psf1
+            build/artifacts/SHA256SUMS
+          if-no-files-found: error
+
+  boot:
+    name: qemu boot smoke
+    runs-on: ubuntu-latest
+    needs: image
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: qizo-${{ github.sha }}
+          path: .
+      - name: boot both images in qemu
+        run: |
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk
+          bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso
+      - name: summary
+        if: always()
+        run: |
+          {
+            echo "## qemu boot"
+            for tag in disk iso; do
+              if [ -f ".qizo-boot-$tag.status" ]; then
+                echo "- $tag: $(cat ".qizo-boot-$tag.status")"
+              else
+                echo "- $tag: not run"
+              fi
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: upload serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qizo-serial
+          path: |
+            serial.log
+            serial-disk.log
+          if-no-files-found: warn

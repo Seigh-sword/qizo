@@ -1,0 +1,55 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: toolchain and venv
+        run: bash tools/ci/bootstrap.sh
+
+      - name: build
+        run: bash tools/ci/build.sh
+
+      - name: verify before publishing
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+          make PYTHON="$PWD/.venv/bin/python" check size
+          sha256sum -c build/artifacts/SHA256SUMS
+
+      - name: package source
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          mkdir -p "qizo-$version"
+          git archive --prefix="qizo-$version/" HEAD | tar -x
+          cp -r build/artifacts "qizo-$version/artifacts"
+          tar -cJf "qizo-$version-src.tar.xz" "qizo-$version"
+          echo "VERSION=$version" >>"$GITHUB_ENV"
+
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: qizo ${{ env.VERSION }}
+          generate_release_notes: true
+          files: |
+            build/artifacts/qizo.img
+            build/artifacts/qizo.img.xz
+            build/artifacts/qizo.iso
+            build/artifacts/qizo.iso.xz
+            build/artifacts/SHA256SUMS
+            qizo-${{ env.VERSION }}-src.tar.xz

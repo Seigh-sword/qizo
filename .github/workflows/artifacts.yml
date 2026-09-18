@@ -1,0 +1,82 @@
+name: artifacts
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: create and publish qizo.img and qizo.iso
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: toolchain and venv
+        run: bash tools/ci/bootstrap.sh
+
+      - name: build the images
+        run: bash tools/ci/build.sh
+
+      - name: boot the disk in qemu and capture the console
+        run: bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk
+
+      - name: boot the iso in qemu and capture the console
+        run: bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso
+
+      - name: package the release assets
+        run: bash tools/ci/publish.sh
+
+      - name: verify every published asset
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c SHA256SUMS
+          for want in qizo-*.img qizo-*.img.xz qizo-*.iso qizo-*.iso.xz; do
+            matched=0
+            for f in $want; do
+              if [ -s "$f" ]; then matched=1; fi
+            done
+            if [ "$matched" -ne 1 ]; then
+              echo "qizo: no non-empty asset matched $want" >&2
+              exit 1
+            fi
+          done
+          for log in $(ls qizo-*-serial-*.log 2>/dev/null || true); do
+            echo "qizo: $log has $(wc -l < "$log") lines"
+            grep -q 'qizo' "$log"
+          done
+
+      - name: upload the workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qizo-images
+          path: dist/*
+          if-no-files-found: error
+
+      - name: rolling latest download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: qizo latest build
+          prerelease: true
+          make_latest: false
+          body_path: dist/NOTES.md
+          files: |
+            dist/qizo-*.img
+            dist/qizo-*.img.xz
+            dist/qizo-*.img.gz
+            dist/qizo-*.iso
+            dist/qizo-*.iso.xz
+            dist/qizo-*-kernel.elf
+            dist/qizo-*.psf1
+            dist/SHA256SUMS
+            dist/serial-*.log
+          fail_on_unmatched_files: true
