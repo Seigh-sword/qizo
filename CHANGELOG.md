@@ -4,6 +4,18 @@
 
 First bootable release. Everything here is new.
 
+### Shell
+- table driven commands: help is generated from the command table, and every
+  command carries its own one line description
+- new commands: `uptime`, `rtc`, `cpuid <leaf>`, `color <0..15>`, `keys`,
+  `hist`, `echo`, `wait <ms>`, `halt`, `fs`, and `help <command>`
+- line editing: up and down walk the history, tab completes the command name,
+  ctrl-u erases the line, ctrl-w erases the last word, ctrl-l clears the screen,
+  ctrl-c cancels the line
+- history keeps 16 distinct commands instead of 8 and skips repeats
+- the keyboard maps the arrow, home, end, insert and delete keys so the shell
+  gets history recall without a mouse or a second tool
+
 ### boot chain
 
 - `boot/stage1.S`: 448 byte MBR program, INT 13h AH=42h reads in 64 sector chunks,

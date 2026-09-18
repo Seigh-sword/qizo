@@ -114,7 +114,7 @@ bit clear means a literal byte.
 | 0x21000.. | blob, up to 124 KiB |
 | 0x41000 | E820 scratch, 0x41300 count |
 | 0x44000 | stage2 protected mode stack top |
-| 0x100000 | kernel load address (identity mapped, 128 KiB budget) |
+| 0x100000 | kernel load address (identity mapped, 144 KiB budget) |
 | 0x180000 | decompression scratch |
 | 0x300000 | stage2 page tables (PML4 + PDPT) |
 

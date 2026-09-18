@@ -40,6 +40,8 @@ static void pic_init(void)
 	qizo_io_wait();
 }
 
+static u64 pit_cycles;
+
 void qizo_irq_handler(struct qizo_regs *regs)
 {
 	u64 vector = regs->vector;
@@ -91,7 +93,7 @@ static inline void halt_once(void)
 
 void qizo_sleep(u64 ms)
 {
-	u64 target;
+	u64 target, limit;
 	volatile u64 spin;
 
 	if (!timer_alive) {
@@ -100,33 +102,45 @@ void qizo_sleep(u64 ms)
 		return;
 	}
 	target = ticks + (ms + ms_per_tick - 1) / ms_per_tick;
-	while (ticks < target)
+	limit = qizo_rdtsc() + (ms + 40) * qizo_cycles_per_ms();
+	while (ticks < target && qizo_rdtsc() < limit)
 		halt_once();
 }
 
 void qizo_calibrate(void)
 {
-	u64 budget = 8000000;
-	u64 start, seen, c0, c1;
+	u64 c0, c1, seen, ticks0;
+	u32 a, b, spin;
+	u64 ms = 0;
 
 	qizo_trace("calibrating");
-	start = ticks;
-	seen = start;
+	ticks0 = ticks;
+	a = qizo_inb(0x40);
 	c0 = qizo_rdtsc();
-	while (ticks == seen && budget--)
-		halt_once();
-	c1 = qizo_rdtsc();
-	if (ticks != seen) {
-		timer_alive = 1;
-		cycles_per_ms = (c1 - c0) / ((ticks - start) * ms_per_tick);
+	for (spin = 0; spin < 400000 && ms < 8; ++spin) {
+		b = qizo_inb(0x40);
+		if (b > a) {
+			a = b;
+			++ms;
+			if (ms == 1)
+				c1 = qizo_rdtsc();
+		}
+	}
+	if (ms) {
+		cycles_per_ms = (c1 - c0) / ms;
 		if (!cycles_per_ms)
 			cycles_per_ms = 1;
-		qizo_printf("timer : %u ticks/s, %u Mcycles/s\r\n",
-			    (u32)(1000 / ms_per_tick), (u32)cycles_per_ms);
-		return;
 	}
-	qizo_puts("timer : no irq0 ticks, using tsc fallback\r\n");
-	cycles_per_ms = 2000000;
+	seen = ticks;
+	for (spin = 0; spin < 200000 && ticks == seen; ++spin)
+		qizo_io_wait();
+	if (ticks != seen) {
+		timer_alive = 1;
+		qizo_printf("timer : %u ticks/s, %u Mcycles/s, pit wraps %u\r\n",
+			    (u32)(ticks - ticks0), (u32)cycles_per_ms, (u32)ms);
+	} else {
+		qizo_puts("timer : irq0 silent, pit polling only\r\n");
+	}
 }
 
 u64 qizo_cycles_per_ms(void)

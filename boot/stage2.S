@@ -74,7 +74,7 @@ a20_done:
 	movl %eax, %es:QIZO_BI_CPUID_MAX
 	movl $0x80000001, %eax
 	cpuid
-	testl $0x200, %edx
+	testl $0x20000000, %edx
 	je fail_nocpu
 	movb $1, %es:QIZO_BI_LONGMODE
 	jmp e820_start
@@ -127,6 +127,8 @@ e820_done:
 	movw %ax, %ds
 	movw $(qizo_gdtr - _start), %bx
 	lgdtl (%bx)
+	movl $0x630, %eax
+	movl %eax, %cr4
 	movl %cr0, %eax
 	andl $0x9FFFFFFF, %eax
 	orl $1, %eax
@@ -375,7 +377,7 @@ ram_done:
 	call qizo_zero
 
 	call qizo_build_pages
-	movl $0x30, %eax
+	movl $0x630, %eax
 	movl %eax, %cr4
 	movl $QIZO_PAGE_PML4, %eax
 	movl %eax, %cr3

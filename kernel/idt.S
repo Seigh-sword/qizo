@@ -50,10 +50,13 @@ qizo_isr_common:
 	pushq %r14
 	pushq %r15
 	cld
-	movq %rsp, %rdi
+	movq %rsp, %rbp
+	andq $-16, %rsp
+	movq %rbp, %rdi
 	call qizo_irq_handler
-	movq %rsp, %rdi
+	movq %rbp, %rdi
 	call qizo_irq_eoi
+	movq %rbp, %rsp
 	fxrstor qizo_fp_area(%rip)
 	popq %r15
 	popq %r14

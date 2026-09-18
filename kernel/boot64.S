@@ -14,6 +14,7 @@ qizo_kernel_entry:
 	cld
 	movq %rdi, %rbx
 	movq $qizo_boot_stack + QIZO_STACK_BYTES, %rsp
+	andq $-16, %rsp
 	xorq %rbp, %rbp
 	call qizo_gdt_install
 	call qizo_idt_install
@@ -94,7 +95,21 @@ qizo_paging_setup:
 
 	movq %r9, %rax
 	movq %rax, %cr3
-	movq $QIZO_CR4_BITS, %rax
+	pushq %rbx
+	movl $1, %eax
+	xorl %ecx, %ecx
+	cpuid
+	movl $0x620, %r10d
+	testl $0x08, %edx
+	jz 4f
+	orl $0x10, %r10d
+4:
+	testl $0x01, %edx
+	jz 5f
+	orl $0x40, %r10d
+5:
+	popq %rbx
+	movq %r10, %rax
 	movq %rax, %cr4
 	movl $QIZO_EFER, %ecx
 	rdmsr

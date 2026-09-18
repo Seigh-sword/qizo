@@ -224,7 +224,7 @@ def main():
         return fail("module header magic missing")
     if total_len < klen + 64:
         return fail("module total %u smaller than image %u" % (total_len, klen + 64))
-    if total_len > 0x20000:
+    if total_len > LY.KERNEL_MAX:
         return fail("module total %u exceeds load budget" % total_len)
     if klen + 64 != len(out):
         return fail("module klen mismatch with stream")
@@ -233,7 +233,7 @@ def main():
     kernel = out[64:64 + klen]
     print("qizo: module ok: kernel %d bytes, entry +%d, blob %d bytes (%.1f%%)" %
           (klen, entry, len(blob), 100.0 * len(blob) / (klen + 64)))
-    if klen > 0x20000:
+    if klen > LY.KERNEL_MAX:
         return fail("kernel oversized")
     if BLOB_PHYS + len(blob) > E820_BUF:
         return fail("blob overlaps the e820 buffer")

@@ -179,8 +179,22 @@ static void handle_set2(u8 code)
 	}
 	if (ext) {
 		ext = 0;
-		if (code == 0x5D && !pending_release)
-			push_key('\n');
+		if (!pending_release) {
+			if (code == 0x5D)
+				push_key('\n');
+			else if (code == 0x75)
+				push_key(0x01);
+			else if (code == 0x72)
+				push_key(0x02);
+			else if (code == 0x69)
+				push_key(0x06);
+			else if (code == 0x70)
+				push_key(0x05);
+			else if (code == 0x71)
+				push_key(0x02);
+			else if (code == 0x7A)
+				push_key(0x01);
+		}
 		pending_release = 0;
 		return;
 	}

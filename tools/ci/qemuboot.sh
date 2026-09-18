@@ -25,13 +25,21 @@ fail() {
 	printf '::error::qizo %s: %s\n' "$tag" "$(printf '%s' "$1" | clean)"
 }
 
+probe() {
+	if grep -qa -- "$2" "$log" 2>/dev/null; then
+		printf '%s ' "$1"
+	fi
+}
+
 report() {
-	local hex txt bios_lines trace_lines
-	hex=$(od -An -tx1 -N 80 "$log" 2>/dev/null | tr -s ' \n' ' ')
-	txt=$(tail -c 120 "$log" 2>/dev/null | tr -cd ' -~')
-	bios_lines=$(tail -2 "$bios" 2>/dev/null | tr -cd ' -~')
-	trace_lines=$(wc -l <"$trace" 2>/dev/null)
-	fail "bytes=$bytes headhex=[$hex] tailtext=[$txt] bioslast=[$bios_lines] tracelines=${trace_lines:-0}"
+	local seen last trace_lines
+	seen=$(probe stage1 "1:"; probe stage2 "2:"; probe handoff "PML6"; probe con "console up";
+		probe mem "memory up"; probe irq "irqs live"; probe cal "calibrating";
+		probe timer "timer"; probe rep "reporting"; probe shell "shell";
+		probe prompt "qizo>"; probe panic "panic")
+	last=$(tail -1 "$log" 2>/dev/null | tr -cd ' -~' | cut -c1-90)
+	trace_lines=$(wc -l <"$trace" 2>/dev/null | tr -d ' ')
+	fail "reached[$seen] bytes=$bytes trace=${trace_lines:-0} last[$last]"
 }
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
