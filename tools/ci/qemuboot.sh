@@ -26,7 +26,12 @@ fail() {
 }
 
 report() {
-	note "serial[$bytes]: $(head -c 300 "$log" 2>/dev/null) || tail: $(tail -c 200 "$log" 2>/dev/null) || bios: $(tail -c 200 "$bios" 2>/dev/null) || trace: $(tail -c 200 "$trace" 2>/dev/null)"
+	local hex txt bios_lines trace_lines
+	hex=$(od -An -tx1 -N 80 "$log" 2>/dev/null | tr -s ' \n' ' ')
+	txt=$(tail -c 120 "$log" 2>/dev/null | tr -cd ' -~')
+	bios_lines=$(tail -2 "$bios" 2>/dev/null | tr -cd ' -~')
+	trace_lines=$(wc -l <"$trace" 2>/dev/null)
+	fail "bytes=$bytes headhex=[$hex] tailtext=[$txt] bioslast=[$bios_lines] tracelines=${trace_lines:-0}"
 }
 
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
