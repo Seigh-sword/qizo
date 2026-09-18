@@ -65,7 +65,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: qizo-${{ github.sha }}
-          path: .
+          path: build/artifacts
       - name: boot the disk image in qemu
         run: |
           rc=0

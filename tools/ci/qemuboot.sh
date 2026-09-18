@@ -47,7 +47,8 @@ fi
 
 if [ ! -f "$image" ]; then
 	echo "fail" >"$status"
-	fail "missing image $image"
+	here=$(dirname "$image")
+	fail "missing image $image, $here holds: $(ls -l "$here" 2>&1 | tail -6 | tr -s ' ')"
 	exit 1
 fi
 
