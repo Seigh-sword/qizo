@@ -120,3 +120,24 @@ bit clear means a literal byte.
 
 `tools/qizocheck/qizobootmodel.py` re-runs the whole chain in Python against the built image
 and fails if any region overlaps, so these numbers stay honest.
+
+## Boot markers
+
+Stage two drives COM1 at 115200 8N1 itself and writes one marker per stage, before
+it trusts anything of its own:
+
+| marker | meaning |
+|---|---|
+| `2:` | stage two is running, COM1 initialised |
+| `P` | about to enter protected mode |
+| `M` | in protected mode, copying the E820 map |
+| `L` | page tables built, about to enter long mode |
+| `6` | in long mode, jumping to the kernel |
+| `E` + two hex digits | failed, the number is the `err` field of bootinfo |
+
+So `2:PML6` on the serial line means the bootloader did its whole job and the
+kernel took over. Nothing at all means stage one never got the disk read (its own
+error is on the screen, not the serial port). `E11` is A20, `E12` is no long mode,
+`E14` is no memory map, `E16` is a bad blob, header or decompression. Set
+`QIZO_BOOT_TRACE` to `0` in `boot/qizoboot.inc` to drop the markers and reclaim
+about 200 bytes of stage two.

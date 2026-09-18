@@ -81,3 +81,33 @@ qemu-system-x86_64 -m 64 -drive file=build/artifacts/qizo.img,format=raw,if=ide 
 
 Type `info`, `bench`, `mem`, then `reboot`. QEMU needs no flags beyond the disk; the image is
 a real MBR disk and boots from a USB stick or a hard drive the same way.
+
+## CI
+
+`.github/workflows/build.yml` runs on every push and pull request: venv and
+toolchain check, `tools/ci/build.sh`, `qizocheck` plus the boot model, hygiene, the
+size budgets, and it uploads `qizo.img`, `qizo.iso`, both `.xz` blobs, the PSF1 font
+and `SHA256SUMS`. A second job installs QEMU and boots both artifacts, waiting for
+the `qizo> ` prompt; that job may show a red cross without failing the run, because
+a runner with no QEMU or no working nested virtualisation should be reported, not
+hidden.
+
+`.github/workflows/artifacts.yml` is the download path. It builds, boots both
+images, then `tools/ci/publish.sh` produces versioned assets in `dist/`
+(`qizo-<version>.img`, `.iso`, `.img.xz`, `.iso.xz`, `.img.gz`, the kernel ELF, the
+font, the boot logs, `SHA256SUMS`), re-verifies every checksum, uploads them as
+workflow artifacts and attaches them to a rolling `latest` prerelease.
+`release.yml` does the same for a `v*` tag as a proper release.
+
+Both use `tools/ci/qemuboot.sh`, which is also what you run locally:
+
+```sh
+bash tools/ci/qemuboot.sh build/artifacts/qizo.img disk
+bash tools/ci/qemuboot.sh build/artifacts/qizo.iso iso
+```
+
+It exits 0 when the shell prompt appeared, 1 when it did not, and 2 when QEMU is not
+available, which the workflows read as a skip. It writes `serial-<tag>.log`,
+`qemu-<tag>.err` and `.qizo-boot-<tag>.status`; the annotation lines it prints are
+what shows up in the Actions log when a boot goes wrong. Set `QIZO_BOOT_EXPECT` to
+wait for a different string, `QIZO_BOOT_TIMEOUT` for a different deadline.
