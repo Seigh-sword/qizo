@@ -32,10 +32,9 @@ probe() {
 }
 
 report() {
-	local sev="$1" seen masks pat m
+	local m pat vec rip
 	seen=""
-	masks="stage1 stage2 pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic"
-	for m in $masks; do
+	for m in stage1 stage2 pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic exc; do
 		pat="$m"
 		case "$m" in
 			stage1) pat="1:" ;;
@@ -52,24 +51,28 @@ report() {
 			rep) pat="reporting" ;;
 			shell) pat="shell" ;;
 			prompt) pat="qizo>" ;;
-			panic) pat="panic" ;;
+			panic) pat="cpu exception" ;;
+			exc) pat="qizo: panic" ;;
 		esac
 		if grep -qa -- "$pat" "$log" 2>/dev/null; then
 			seen="$seen$m "
 		fi
 	done
-	{
-		printf 'qizo %s: reached[%s] bytes=%s trace=%s' "$tag" "${seen:-none}" "${bytes:-0}" "${tlen:-0}"
-		if [ -f "$err" ] && grep -qaE 'error|failed|unsupported' "$err" 2>/dev/null; then
-			printf ' qemuerr'
-		fi
-		printf '\n'
-	} >".qizo-boot-$tag.probe"
-	probe_sev=warning
-	if [ "$sev" = failure ]; then
-		probe_sev=error
+	probe_msg="reached[${seen:-none}] bytes=${bytes:-0} trace=${tlen:-0}"
+	if [ -f "$err" ] && grep -qaE 'error|failed|unsupported' "$err" 2>/dev/null; then
+		probe_msg="$probe_msg qemuerr"
 	fi
-	printf '::%s::qizo %s: %s\n' "$probe_sev" "$tag" "$(cat ".qizo-boot-$tag.probe" | clean)"
+	vec=$(sed -n 's/.*cpu exception \([0-9][0-9]*\).*/\1/p' "$log" 2>/dev/null | head -1)
+	vec=$(printf '%s' "$vec" | tr -dc '0-9')
+	if [ -n "$vec" ]; then
+		probe_msg="$probe_msg vec=$vec"
+	fi
+	rip=$(sed -n 's/.*rip=\(0x[0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' "$log" 2>/dev/null | head -1)
+	rip=$(printf '%s' "$rip" | tr -dc '0-9a-f')
+	if [ -n "$rip" ]; then
+		probe_msg="$probe_msg rip=$rip"
+	fi
+	printf 'qizo %s: %s\n' "$tag" "$probe_msg" >".qizo-boot-$tag.probe"
 }
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
 	qemu=qemu-system-x86_64
@@ -130,8 +133,8 @@ tlen=${tlen:-0}
 
 if [ "$bytes" -eq 0 ]; then
 	echo "fail" >"$status"
-	report "failure"
-	fail "no serial output at all from $image, qemu said: $(tail -2 "$err" 2>/dev/null)"
+	report
+	fail "no serial output at all, $probe_msg"
 	exit 1
 fi
 
@@ -139,15 +142,15 @@ sed -e 's/[^[:print:]]/./g' "$log" | tail -40
 
 if grep -qa 'panic' "$log"; then
 	echo "fail" >"$status"
-	report "failure"
-	fail "kernel panic: $(grep -a 'panic' "$log" | head -2)"
+	report
+	fail "kernel stopped: $probe_msg"
 	exit 1
 fi
 
 if ! grep -qa "$expect" "$log"; then
 	echo "fail" >"$status"
-	report "failure"
-	fail "stopped before the shell, waiting for: $expect"
+	report
+	fail "stopped before the shell, $probe_msg"
 	exit 1
 fi
 
