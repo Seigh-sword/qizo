@@ -10,6 +10,7 @@ expect=${QIZO_BOOT_EXPECT:-qizo> }
 status=".qizo-boot-$tag.status"
 log="serial-$tag.log"
 err="qemu-$tag.err"
+trace="qemu-$tag.trace"
 
 note() {
 	local text=$1
@@ -64,6 +65,7 @@ timeout "$timeout_s" "$qemu" \
 	-machine pc -m 64 -smp 1 -cpu qemu64 \
 	-display none -monitor none -serial "file:$log" \
 	-no-reboot -no-shutdown \
+	-d int,cpu_reset,guest_errors -D "$trace" \
 	"${drive[@]}" 2>"$err" &
 pid=$!
 

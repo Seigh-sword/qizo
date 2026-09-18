@@ -7,6 +7,11 @@
 _start:
 	cli
 	cld
+.if QIZO_BOOT_TRACE
+	call qizo_com1_init
+	movb $0x31, %al
+	outb %al, $0x3F8
+.endif
 	xorw %ax, %ax
 	movw %ax, %ds
 	movw %ax, %es
@@ -44,14 +49,26 @@ chunk_set:
 	jmp boot_fail
 
 read_ok:
+.if QIZO_BOOT_TRACE
+	movb $0x52, %al
+	outb %al, $0x3F8
+.endif
 	movw QIZO_DAP_ADDR + 2, %ax
 	addw %ax, %bx
 	jmp read_chunk
 
 go_stage2:
+.if QIZO_BOOT_TRACE
+	movb $0x4A, %al
+	outb %al, $0x3F8
+.endif
 	ljmp $QIZO_STAGE2_SEG, $0
 
 boot_fail:
+.if QIZO_BOOT_TRACE
+	movb $0x45, %al
+	outb %al, $0x3F8
+.endif
 	movw $(qizo_fail_msg - _start), %si
 	xorw %bx, %bx
 	jmp print
@@ -72,6 +89,23 @@ halt:
 
 qizo_fail_msg:
 	.asciz "QIZO STAGE1 DISK ERR"
+
+.if QIZO_BOOT_TRACE
+qizo_com1_init:
+	movb $0x83, %al
+	outb %al, $0x3FB
+	movb $0x01, %al
+	outb %al, $0x3F8
+	movb $0x00, %al
+	outb %al, $0x3F9
+	movb $0x03, %al
+	outb %al, $0x3FB
+	movb $0xC7, %al
+	outb %al, $0x3F2
+	movb $0x0B, %al
+	outb %al, $0x3FD
+	ret
+.endif
 
 .fill 464 - (. - _start), 1, 0
 
