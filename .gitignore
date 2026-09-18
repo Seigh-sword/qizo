@@ -1,0 +1,12 @@
+build/
+*.o
+*.bin
+*.img
+*.iso
+*.xz
+__pycache__/
+*.pyc
+.venv/
+dist/
+.qizo-boot-*.status
+serial-*.log

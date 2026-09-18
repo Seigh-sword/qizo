@@ -1,0 +1,468 @@
+.section .qizo_boot,"ax"
+.code16
+
+.include "qizoboot.inc"
+
+.global _start
+_start:
+	cli
+	cld
+	xorw %ax, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	movw %ax, %ss
+	movw $0x8FF0, %sp
+
+	movl $QIZO_BOOTINFO_SEG, %eax
+	movw %ax, %es
+	movl $0x00010001, %es:QIZO_BI_MAGIC
+	movb QIZO_BIOS_ARG + QIZO_ARG_DRIVE, %al
+	movb %al, %es:QIZO_BI_DRIVE
+	movb $1, %es:QIZO_BI_MODE
+	movl QIZO_BIOS_ARG + QIZO_ARG_LBA, %eax
+	movl %eax, %es:QIZO_BI_BLOB_LBA
+	movzwl QIZO_BIOS_ARG + QIZO_ARG_TOTAL, %eax
+	movw %ax, %es:QIZO_BI_BLOB_SECTORS
+	shll $9, %eax
+	subl $(QIZO_BLOB_PHYS - QIZO_STAGE2), %eax
+	movl %eax, %es:QIZO_BI_BLOB_SIZE
+	movl $QIZO_BLOB_PHYS, %eax
+	movl %eax, %es:QIZO_BI_BLOB_PHYS
+	movl QIZO_BIOS_ARG + QIZO_ARG_CRC, %eax
+	movl %eax, %es:QIZO_BI_BLOB_CRC
+	movl $QIZO_SCRATCH, %eax
+	movl %eax, %es:QIZO_BI_SCRATCH
+	movl $QIZO_KTEXT, %eax
+	movl %eax, %es:QIZO_BI_KTEXT
+	movl $QIZO_BOOTVER, %eax
+	movl %eax, %es:QIZO_BI_FLAGS
+	movb $0, %es:QIZO_BI_ERR
+
+	movb $0xAA, 0x4FF0
+	cmpb $0xAA, 0x0FF0
+	je a20_done
+	inb $0x92, %al
+	orb $2, %al
+	outb %al, $0x92
+	movb $0x55, 0x4FF0
+	cmpb $0x55, 0x0FF0
+	je a20_done
+	movb $0, %es:QIZO_BI_A20
+	movb $0x11, %es:QIZO_BI_ERR
+	jmp qizo_fail16
+
+a20_done:
+	movb $1, %es:QIZO_BI_A20
+	pushfl
+	popw %ax
+	xorw $0x200, %ax
+	pushw %ax
+	popfl
+	pushfl
+	popw %ax
+	testw $0x200, %ax
+	je fail_nocpu
+	xorl %eax, %eax
+	cpuid
+	movl %eax, %es:QIZO_BI_CPUID_MAX
+	movl $0x80000001, %eax
+	cpuid
+	testl $0x200, %edx
+	je fail_nocpu
+	movb $1, %es:QIZO_BI_LONGMODE
+	jmp e820_start
+
+fail_nocpu:
+	movb $0x12, %es:QIZO_BI_ERR
+	jmp qizo_fail16
+
+e820_start:
+	movw $QIZO_E820_SEG, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	xorw %di, %di
+	xorl %ebp, %ebp
+	xorl %ebx, %ebx
+	movw $QIZO_E820_CNT_OFS, %si
+	movl $0, (%si)
+
+e820_next:
+	cmpl $QIZO_E820_MAX, %ebp
+	jae e820_done
+	movl $0x534D4150, %ecx
+	movl $0xE820, %eax
+	xorl %edx, %edx
+	int $0x15
+	jc e820_check
+	cmpl $0x534D4150, 0x14(%di)
+	jne e820_check
+	cmpl $0x14, %eax
+	jb e820_check
+	addw $QIZO_E820_ENT, %di
+	incw %bp
+	incl (%si)
+	testl %ebx, %ebx
+	jne e820_next
+
+e820_check:
+	testl %ebp, %ebp
+	jne e820_done
+	movb $0x14, %es:QIZO_BI_ERR
+	jmp qizo_fail16
+
+e820_done:
+	movw $QIZO_BOOTINFO_SEG, %ax
+	movw %ax, %es
+	movw $QIZO_E820_CNT_OFS, %si
+	movl (%si), %eax
+	movl %eax, %es:QIZO_BI_E820_N
+	movw $QIZO_STAGE2_SEG, %ax
+	movw %ax, %ds
+	movw $(qizo_gdtr - _start), %bx
+	lgdtl (%bx)
+	movl %cr0, %eax
+	andl $0x9FFFFFFF, %eax
+	orl $1, %eax
+	movl %eax, %cr0
+	ljmpl $0x08, $qizo_pm32
+
+print16:
+	lodsb
+	testb %al, %al
+	jz halt16
+	movb $0x0E, %ah
+	xorw %bx, %bx
+	movb %al, %dl
+	int $0x10
+	jmp print16
+
+halt16:
+	hlt
+	jmp halt16
+
+.global qizo_fail16
+qizo_fail16:
+	movw %cs, %ax
+	movw %ax, %ds
+	movw $(qizo_msg - _start), %si
+	xorw %bx, %bx
+	jmp print16
+
+qizo_gdt:
+	.quad 0
+	.long 0xFFFFFFFF, 0x00CF9A00
+	.long 0xFFFFFFFF, 0x00CF9200
+	.long 0xFFFFFFFF, 0x00AF9A00
+	.long 0x00000000, 0x00CF9200
+	.long 0xFFFFFFFF, 0x00CFFA00
+	.long 0xFFFFFFFF, 0x00CFF200
+
+qizo_gdtr:
+	.word 55
+	.long QIZO_STAGE2 + (qizo_gdt - _start)
+
+qizo_msg:
+	.asciz "QIZO BOOT ERR "
+
+.section .qizo_pm32,"ax"
+.code32
+
+.global qizo_pm32
+qizo_pm32:
+	movw $0x10, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	movw %ax, %ss
+	movl $QIZO_PM_STACK, %esp
+
+	movl QIZO_BOOTINFO + QIZO_BI_E820_N, %ecx
+	cmpl $QIZO_E820_MAX, %ecx
+	jbe e820_clamp
+	movl $QIZO_E820_MAX, %ecx
+
+e820_clamp:
+	movl %ecx, QIZO_BOOTINFO + QIZO_BI_E820_N
+	shll $3, %ecx
+	leal (%ecx,%ecx,2), %ecx
+	movl $QIZO_E820_BUF, %esi
+	movl $(QIZO_BOOTINFO + QIZO_BI_E820), %edi
+	rep movsb
+
+	movl $QIZO_BOOTINFO + QIZO_BI_E820, %esi
+	xorl %edx, %edx
+	movl QIZO_BOOTINFO + QIZO_BI_E820_N, %ecx
+
+ram_next:
+	testl %ecx, %ecx
+	je ram_done
+	cmpl $1, 16(%esi)
+	jne ram_skip
+	movl 8(%esi), %eax
+	orl 12(%esi), %eax
+	jne ram_sat
+	addl %eax, %edx
+	jnc ram_skip
+
+ram_sat:
+	movl $0xFFFFFFFF, %edx
+
+ram_skip:
+	addl $QIZO_E820_ENT, %esi
+	decl %ecx
+	jne ram_next
+
+ram_done:
+	movl %edx, QIZO_BOOTINFO + QIZO_BI_TOTAL_RAM
+
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_SIZE, %ecx
+	call qizo_adler
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_SIZE, %ecx
+	cmpl QIZO_BOOTINFO + QIZO_BI_BLOB_CRC, %eax
+	jne fail32
+
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_SIZE, %ecx
+	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %edi
+	call qizo_decompress
+	testl %eax, %eax
+	je fail32
+
+	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %edi
+	cmpl $QIZO_QIZOK_MAGIC, 0(%edi)
+	jne fail32
+	movl 4(%edi), %ecx
+	cmpl $QIZO_KERNEL_MAX, %ecx
+	ja fail32
+	movl 12(%edi), %eax
+	cmpl $QIZO_KERNEL_MAX, %eax
+	ja fail32
+	cmpl %ecx, %eax
+	jb fail32
+	movl 16(%edi), %eax
+	cmpl $QIZO_KTEXT, %eax
+	jne fail32
+	movl 8(%edi), %edx
+	cmpl %ecx, %edx
+	jae fail32
+	movl %ecx, QIZO_BOOTINFO + QIZO_BI_KERNEL_SIZE
+	movl %edx, QIZO_BOOTINFO + QIZO_BI_KERNEL_ENTRY
+	movl 12(%edi), %eax
+	movl %eax, QIZO_BOOTINFO + QIZO_BI_KERNEL_TOTAL
+	subl %ecx, %eax
+	movl %eax, QIZO_BOOTINFO + QIZO_BI_KERNEL_BSS
+
+	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %esi
+	addl $(QIZO_QIZOK_HDR + 8), %esi
+	movl QIZO_BOOTINFO + QIZO_BI_KTEXT, %edi
+	movl QIZO_BOOTINFO + QIZO_BI_KERNEL_SIZE, %ecx
+	call qizo_copy
+
+	movl QIZO_BOOTINFO + QIZO_BI_KTEXT, %edi
+	addl QIZO_BOOTINFO + QIZO_BI_KERNEL_SIZE, %edi
+	movl QIZO_BOOTINFO + QIZO_BI_KERNEL_BSS, %ecx
+	call qizo_zero
+
+	call qizo_build_pages
+	movl $0x30, %eax
+	movl %eax, %cr4
+	movl $QIZO_PAGE_PML4, %eax
+	movl %eax, %cr3
+	movl $0xC0000080, %ecx
+	rdmsr
+	orl $0x901, %eax
+	wrmsr
+	movl %cr0, %eax
+	orl $0x80000001, %eax
+	movl %eax, %cr0
+	ljmpl $0x28, $qizo_long64
+
+fail32:
+	movb $0x16, QIZO_BOOTINFO + QIZO_BI_ERR
+	movl %cr0, %eax
+	andl $0x7FFFFFFF, %eax
+	movl %eax, %cr0
+	movl %cr0, %eax
+	andl $0x7FFFFFFF, %eax
+	movl %eax, %cr0
+	ljmpl $QIZO_STAGE2_SEG, $(qizo_fail16 - QIZO_STAGE2)
+
+.section .qizo_long64,"ax"
+.code64
+
+.global qizo_long64
+qizo_long64:
+	movw $0x10, %ax
+	movw %ax, %ds
+	movw %ax, %es
+	movw %ax, %ss
+	movabsq $QIZO_PM_STACK, %rsp
+	movabsq $QIZO_BOOTINFO, %rdi
+	movl QIZO_BOOTINFO + QIZO_BI_KTEXT, %eax
+	addl QIZO_BOOTINFO + QIZO_BI_KERNEL_ENTRY, %eax
+	jmp *%rax
+
+.section .qizo_aux,"ax"
+.code32
+
+qizo_adler:
+	xorl %eax, %eax
+	movl $1, %edi
+	testl %ecx, %ecx
+	je adler_done
+
+adler_loop:
+	movzbl (%esi), %edx
+	addl %edx, %eax
+	addl %eax, %edi
+	cmpl $65521, %eax
+	jb adler_a
+	subl $65521, %eax
+
+adler_a:
+	cmpl $65521, %edi
+	jb adler_b
+	subl $65521, %edi
+
+adler_b:
+	incl %esi
+	decl %ecx
+	jne adler_loop
+	shll $16, %edi
+	orl %edi, %eax
+
+adler_done:
+	ret
+
+qizo_decompress:
+	pushl %ebx
+	pushl %ebp
+	pushl %esi
+	pushl %edi
+	movl %ecx, %ebp
+	movl (%esi), %eax
+	movl 4(%esi), %edx
+	addl $8, %esi
+	subl $8, %ebp
+	cmpl $QIZO_LZSS_MAGIC, %eax
+	jne decomp_raw
+	addl %edi, %edx
+	movl $0x100, %ebx
+	xorl %ecx, %ecx
+	jmp decomp_top
+
+decomp_raw:
+	movl %esi, %edx
+	addl %ebp, %edx
+	movl %ebp, %ecx
+
+decomp_top:
+	cmpl %edx, %edi
+	jae decomp_ok
+	testl %ecx, %ecx
+	jne decomp_copy_byte
+	shrl $1, %ebx
+	testl $0x100, %ebx
+	jnz decomp_item
+	movzbl (%esi), %eax
+	incl %esi
+	movl %eax, %ebx
+	orl $0x100, %ebx
+
+decomp_item:
+	testl $1, %ebx
+	jnz decomp_match
+	movb (%esi), %al
+	incl %esi
+	movb %al, (%edi)
+	incl %edi
+	jmp decomp_top
+
+decomp_match:
+	movzwl (%esi), %eax
+	addl $2, %esi
+	movl %eax, %ecx
+	shrl $4, %ecx
+	incl %ecx
+	andl $0xF, %eax
+	addl $3, %eax
+	movl %edi, %esi
+	subl %eax, %esi
+	xorl %eax, %eax
+
+decomp_copy:
+	movb (%esi), %al
+	movb %al, (%edi)
+	incl %esi
+	incl %edi
+	decl %ecx
+	jne decomp_copy
+	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
+	addl $8, %esi
+	jmp decomp_top
+
+decomp_copy_byte:
+	movb (%esi), %al
+	incl %esi
+	movb %al, (%edi)
+	incl %edi
+	decl %ecx
+	jmp decomp_top
+
+decomp_ok:
+	movl $1, %eax
+	jmp decomp_ret
+
+decomp_fail:
+	movb $0x15, QIZO_BOOTINFO + QIZO_BI_ERR
+	xorl %eax, %eax
+
+decomp_ret:
+	popl %edi
+	popl %esi
+	popl %ebp
+	popl %ebx
+	ret
+
+qizo_copy:
+	rep movsb
+	ret
+
+qizo_zero:
+	xorl %eax, %eax
+	rep stosb
+	ret
+
+qizo_build_pages:
+	movl $QIZO_PAGE_PML4, %edi
+	movl $0x6000, %ecx
+	call qizo_zero
+	movl $QIZO_PAGE_PML4, %edi
+	movl $4, %ecx
+	movl $QIZO_PAGE_PDPT, %eax
+
+pml4_fill:
+	movl %eax, %edx
+	orl $QIZO_PT_PAGE, %edx
+	movl %edx, (%edi)
+	movl $0, 4(%edi)
+	addl $0x1000, %eax
+	addl $8, %edi
+	decl %ecx
+	jne pml4_fill
+
+	movl $QIZO_PAGE_PDPT, %edi
+	xorl %eax, %eax
+	movl $2048, %ecx
+
+pdpt_fill:
+	movl %eax, %edx
+	orl $QIZO_PT_PAGE, %edx
+	movl %edx, (%edi)
+	movl $0, 4(%edi)
+	addl $0x200000, %eax
+	addl $8, %edi
+	decl %ecx
+	jne pdpt_fill
+	ret
