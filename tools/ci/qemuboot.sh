@@ -99,7 +99,11 @@ if [ ! -f "$image" ]; then
 	exit 1
 fi
 
-note "qemu $("$qemu" --version | head -1)"
+qver=$("$qemu" --version 2>/dev/null | head -1 | cut -c1-40)
+note "qemu $qver" 
+
+ibytes=$(wc -c <"$image" 2>/dev/null | tr -dc '0-9')
+note "image $image ok, ${ibytes:-0} bytes, expect \"${expect}\""
 
 drive=()
 case "$image" in
@@ -124,7 +128,9 @@ for _ in $(seq 1 "$timeout_s"); do
 done
 
 kill "$pid" 2>/dev/null || true
-wait "$pid" 2>/dev/null || true
+qemu_rc=0
+wait "$pid" 2>/dev/null || qemu_rc=$?
+note "qemu exited rc=$qemu_rc after ${timeout_s}s window"
 
 bytes=$(wc -c <"$log" 2>/dev/null | tr -d ' ')
 bytes=${bytes:-0}
@@ -138,7 +144,9 @@ if [ "$bytes" -eq 0 ]; then
 	exit 1
 fi
 
-sed -e 's/[^[:print:]]/./g' "$log" | tail -40
+{ printf 'qizo %s: last serial lines\n' "$tag"
+  sed -e 's/[^[:print:]]/./g' "$log" | tail -12 | cut -c1-200
+} >"qizo-console-$tag.txt"
 
 if grep -qa 'panic' "$log"; then
 	echo "fail" >"$status"

@@ -40,6 +40,22 @@ jobs:
           if [ "$rc" -eq 2 ]; then rc=0; fi
           exit $rc
 
+      - name: keep the boot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qizo-boot-log-${{ github.sha }}
+          path: |
+            serial-disk.log
+            serial-iso.log
+            qemu-disk.err
+            qemu-iso.err
+            qizo-console-disk.txt
+            qizo-console-iso.txt
+            .qizo-boot-disk.probe
+            .qizo-boot-iso.probe
+          if-no-files-found: warn
+
       - name: package the release assets
         run: bash tools/ci/publish.sh
 
