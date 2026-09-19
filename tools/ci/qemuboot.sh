@@ -73,10 +73,14 @@ report() {
 		probe_msg="$probe_msg code=$acode"
 	fi
 	tfmt=$(head -1 "$trace" 2>/dev/null | tr -dc 'A-Za-z0-9 =:/._+-' | cut -c1-40)
+	last=$(tail -1 "$trace" 2>/dev/null | tr -dc 'A-Za-z0-9 =:/._+-[]()' | cut -c1-56)
 	resets=$(grep -ac 'CPU Reset' "$trace" 2>/dev/null | head -1)
 	resets=${resets:-0}
 	if [ -n "$tfmt" ]; then
 		probe_msg="$probe_msg fmt=$tfmt resets=$resets"
+	fi
+	if [ -n "$last" ]; then
+		probe_msg="$probe_msg last=$last"
 	fi
 	rip=$(sed -n 's/.*rip=\(0x[0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' "$log" 2>/dev/null | head -1)
 	rip=$(printf '%s' "$rip" | tr -dc '0-9a-f')
