@@ -583,44 +583,44 @@ qizo_decompress:
 	pushl %ebp
 	pushl %esi
 	pushl %edi
-	movl %ecx, %ebp
 	movl (%esi), %eax
 	movl 4(%esi), %edx
-	addl $8, %esi
-	subl $8, %ebp
 	cmpl $QIZO_LZSS_MAGIC, %eax
 	jne decomp_raw
+	addl $8, %esi
 	addl %edi, %edx
-	movl $0x100, %ebx
+	movl $0x80, %ebx
+	xorl %ebp, %ebp
 	xorl %ecx, %ecx
 	jmp decomp_top
 
 decomp_raw:
-	movl %esi, %edx
-	addl %ebp, %edx
-	movl %ebp, %ecx
+	addl %edi, %edx
+	xorl %ebp, %ebp
 
 decomp_top:
 	cmpl %edx, %edi
 	jae decomp_ok
 	testl %ecx, %ecx
 	jne decomp_copy_byte
-	shrl $1, %ebx
-	testl $0x100, %ebx
-	jnz decomp_item
-	movzbl (%esi), %eax
-	incl %esi
-	movl %eax, %ebx
-	orl $0x100, %ebx
+	addl %ebx, %ebx
+	cmpl $0x100, %ebx
+	je decomp_refill
 
 decomp_item:
-	testl $1, %ebx
-	jnz decomp_match
+	testl %ebx, %ebp
+	jne decomp_match
 	movb (%esi), %al
 	incl %esi
 	movb %al, (%edi)
 	incl %edi
 	jmp decomp_top
+
+decomp_refill:
+	movl $1, %ebx
+	movzbl (%esi), %ebp
+	incl %esi
+	jmp decomp_item
 
 decomp_match:
 	movzwl (%esi), %eax
@@ -630,25 +630,18 @@ decomp_match:
 	incl %ecx
 	andl $0xF, %eax
 	addl $3, %eax
-	movl %edi, %ebp
-	subl %ecx, %ebp
+	pushl %ecx
 	pushl %eax
 
 decomp_copy:
-	popl %ecx
-	testl %ecx, %ecx
-	je decomp_top
-
-decomp_copy_loop:
-	movb (%ebp), %al
+	movl %edi, %eax
+	subl 4(%esp), %eax
+	movb (%eax), %al
 	movb %al, (%edi)
-	incl %ebp
 	incl %edi
-	decl %ecx
-	jne decomp_copy_loop
-	jmp decomp_top
-	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
-	addl $8, %esi
+	decl 0(%esp)
+	jne decomp_copy
+	addl $8, %esp
 	jmp decomp_top
 
 decomp_copy_byte:
@@ -668,6 +661,11 @@ decomp_fail:
 	xorl %eax, %eax
 
 decomp_ret:
+	popl %edi
+	popl %esi
+	popl %ebp
+	popl %ebx
+	ret
 	popl %edi
 	popl %esi
 	popl %ebp
