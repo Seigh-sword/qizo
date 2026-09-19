@@ -304,20 +304,24 @@ qizo_msg:
 
 .global qizo_pm32
 qizo_pm32:
-.if QIZO_BOOT_TRACE
-	pushal
-	pushfl
-	movl $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %ecx
-	movb $0x4D, %al
-	call *%ecx
-	popfl
-	popal
-.endif
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %es
 	movw %ax, %ss
 	movl $QIZO_PM_STACK, %esp
+.if QIZO_BOOT_TRACE
+	movb $0x4D, %al
+	movl $4000, %ecx
+	movl $0x3FD, %edx
+1:	inb %dx, %al
+	andb $0x20, %al
+	jnz 2f
+	decl %ecx
+	jnz 1b
+2:	movb $0x4D, %al
+	movl $0x3F8, %edx
+	outb %al, %dx
+.endif
 
 	movl QIZO_BOOTINFO + QIZO_BI_E820_N, %ecx
 	cmpl $QIZO_E820_MAX, %ecx
@@ -421,15 +425,57 @@ ram_done:
 	orl $0x80000001, %eax
 	movl %eax, %cr0
 .if QIZO_BOOT_TRACE
-	pushal
-	pushfl
-	movl $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %ecx
 	movb $0x4C, %al
-	call *%ecx
-	popfl
-	popal
+	movl $4000, %ecx
+	movl $0x3FD, %edx
+3:	inb %dx, %al
+	andb $0x20, %al
+	jnz 4f
+	decl %ecx
+	jnz 3b
+4:	movb $0x4C, %al
+	movl $0x3F8, %edx
+	outb %al, %dx
 .endif
 	ljmpl $0x28, $qizo_long64
+
+qizo_pm_putc:
+	movzbl %al, %eax
+	pushl %eax
+	movl $4000, %ecx
+	movl $0x3FD, %edx
+20:	inb %dx, %al
+	andb $0x20, %al
+	jnz 21f
+	decl %ecx
+	jnz 20b
+21:	popl %eax
+	movl $0x3F8, %edx
+	outb %al, %dx
+	ret
+
+qizo_pm_nib:
+	andl $0x0F, %eax
+	cmpl $9, %eax
+	jbe 22f
+	addl $0x37, %eax
+	jmp 23f
+22:	addl $0x30, %eax
+23:	call qizo_pm_putc
+	ret
+
+qizo_fail_pm:
+	movb $0x45, %al
+	call qizo_pm_putc
+	movzbl QIZO_BOOTINFO + QIZO_BI_ERR, %eax
+	movl %eax, %ebp
+	shrl $4, %eax
+	call qizo_pm_nib
+	movl %ebp, %eax
+	call qizo_pm_nib
+24:	cli
+	hlt
+	jmp 24b
 
 fail32:
 	movb $0x16, QIZO_BOOTINFO + QIZO_BI_ERR
@@ -439,31 +485,31 @@ fail32:
 	movl %cr0, %eax
 	andl $0x7FFFFFFF, %eax
 	movl %eax, %cr0
-	ljmpl $QIZO_STAGE2_SEG, $(qizo_fail16 - QIZO_STAGE2)
+	jmp qizo_fail_pm
 
 .section .qizo_long64,"ax"
 .code64
 
 .global qizo_long64
 qizo_long64:
-.if QIZO_BOOT_TRACE
-	pushq %rax
-	pushq %rcx
-	pushq %rdx
-	pushfq
-	movabsq $(QIZO_STAGE2 + (qizo_trace_putc - _start)), %rcx
-	movb $0x36, %al
-	call *%rcx
-	popfq
-	popq %rdx
-	popq %rcx
-	popq %rax
-.endif
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %es
 	movw %ax, %ss
 	movabsq $QIZO_PM_STACK, %rsp
+.if QIZO_BOOT_TRACE
+	movb $0x36, %al
+	movl $4000, %ecx
+	movl $0x3FD, %edx
+5:	inb %dx, %al
+	andb $0x20, %al
+	jnz 6f
+	decl %ecx
+	jnz 5b
+6:	movb $0x36, %al
+	movl $0x3F8, %edx
+	outb %al, %dx
+.endif
 	movabsq $QIZO_BOOTINFO, %rdi
 	movl QIZO_BOOTINFO + QIZO_BI_KTEXT, %eax
 	addl QIZO_BOOTINFO + QIZO_BI_KERNEL_ENTRY, %eax
