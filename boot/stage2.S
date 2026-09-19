@@ -168,14 +168,12 @@ e820_done:
 	movl %cr0, %eax
 	andl $0x9FFFFFFF, %eax
 	orl $1, %eax
-.if QIZO_BOOT_TRACE
-	movb $0x50, %al
-	call qizo_trace_putc
-.endif
 	movl %eax, %cr0
 .if QIZO_BOOT_TRACE
-	movb $0x62, %al
+	pushw %ax
+	movb $0x50, %al
 	call qizo_trace_putc
+	popw %ax
 .endif
 	ljmpl $0x08, $qizo_pm32
 
