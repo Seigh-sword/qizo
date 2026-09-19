@@ -34,7 +34,7 @@ static void pic_init(void)
 	qizo_io_wait();
 	qizo_outb(0x21, 0x01);
 	qizo_io_wait();
-	qizo_outb(0xA1, 0xFF);
+	qizo_outb(0xA1, 0xEF);
 	qizo_io_wait();
 	qizo_outb(0x21, 0xFC);
 	qizo_io_wait();
@@ -79,6 +79,15 @@ void qizo_irq_handler(struct qizo_regs *regs)
 		keyboard_irqs++;
 		if (status & 1)
 			qizo_kbd_interrupt((u8)qizo_inb(0x60));
+		return;
+	}
+	if (vector == 44) {
+		u8 status = qizo_inb(0x64);
+
+		if ((status & 0x21) == 0x21)
+			qizo_mouse_interrupt(qizo_inb(0x60));
+		else
+			qizo_inb(0x60);
 		return;
 	}
 	spurious++;
@@ -205,6 +214,7 @@ void qizo_kernel_main_entry(struct qizo_bootinfo *info)
 	pic_init();
 	qizo_timer_init();
 	qizo_kbd_init();
+	qizo_drivers_start();
 	qizo_sti();
 	qizo_msr_probe();
 	qizo_trace("irqs live");

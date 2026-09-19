@@ -166,3 +166,90 @@ static inline void qizo_halt(void)
 	for (;;)
 		__asm__ volatile("hlt");
 }
+
+struct qizo_mouse {
+	u32 buttons;
+	i32 x, y;
+	i32 dx, dy;
+	u64 packets;
+	u64 errors;
+	int ready;
+};
+
+struct qizo_fat {
+	int present;
+	u32 sect_per_clust;
+	u32 clusters;
+	u32 free_clusters;
+	u64 total_bytes;
+	u64 free_bytes;
+	u64 start_lba;
+	char label[12];
+	char type[9];
+};
+
+#define QIZO_DRIVER_ABSENT -1
+#define QIZO_DRIVER_PRESENT 0
+#define QIZO_DRIVER_READY 1
+
+void qizo_pad(const char *text, u32 width);
+void qizo_drivers_start(void);
+void qizo_drivers_report(void);
+u32 qizo_drivers_count(void);
+const char *qizo_driver_name(u32 i);
+const char *qizo_driver_kind(u32 i);
+const char *qizo_driver_detail(u32 i);
+int qizo_driver_state(u32 i);
+void qizo_sysmngr(const char *arg);
+
+int qizo_kbd_probe(void);
+void qizo_kbd_start(void);
+const char *qizo_kbd_detail(void);
+
+int qizo_mouse_probe(void);
+void qizo_mouse_start(void);
+const char *qizo_mouse_detail(void);
+void qizo_mouse_interrupt(u8 byte);
+int qizo_mouse_read(struct qizo_mouse *out);
+void qizo_mouse_flush(void);
+void qizo_mouse_now(struct qizo_mouse *out);
+int qizo_mouse_reporting(void);
+u64 qizo_mouse_irqs(void);
+u32 qizo_mouse_dropped(void);
+void qizo_mouse_report(void);
+
+int qizo_ata_probe(void);
+void qizo_ata_start(void);
+const char *qizo_ata_detail(void);
+int qizo_ata_read(u64 lba, u32 count, void *dst);
+int qizo_ata_read_drive(u32 drive, u64 lba, u32 count, void *dst);
+int qizo_ata_present(void);
+int qizo_ata_drive_count(void);
+u64 qizo_ata_sectors(void);
+const char *qizo_ata_model(void);
+int qizo_ata_drive_sectors(u32 drive, u64 *out);
+const char *qizo_ata_drive_model(u32 drive);
+u64 qizo_ata_reads(void);
+u64 qizo_ata_blocks(void);
+u32 qizo_ata_errors(void);
+
+int qizo_fat_probe(void);
+void qizo_fat_start(void);
+const char *qizo_fat_detail(void);
+int qizo_fat_stat(struct qizo_fat *out);
+int qizo_fat_stat_drive(u32 drive, struct qizo_fat *out);
+
+int qizo_pci_probe(void);
+void qizo_pci_start(void);
+const char *qizo_pci_detail(void);
+u32 qizo_pci_count(void);
+int qizo_pci_slot_info(u32 i, u32 *vend, u32 *devid, u32 *class);
+u64 qizo_pci_bar0(u32 i);
+
+int qizo_rtl_probe(void);
+void qizo_rtl_start(void);
+const char *qizo_rtl_detail(void);
+int qizo_net_present(void);
+void qizo_net_mac(u8 *out);
+int qizo_net_io_port(u32 *out);
+u32 qizo_net_io(void);

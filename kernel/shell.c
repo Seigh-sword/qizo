@@ -2,7 +2,7 @@
 
 #define LINE_MAX 128
 #define HIST_MAX 16
-#define NCMD 22
+#define NCMD 24
 #define KEY_UP 0x01
 #define KEY_DOWN 0x02
 
@@ -39,6 +39,17 @@ static u32 hist_count;
 static int keys_mode;
 
 static void cmd_help(const char *arg);
+
+static void cmd_sysmngr(const char *arg)
+{
+	qizo_sysmngr(arg);
+}
+
+static void cmd_mouse(const char *arg)
+{
+	(void)arg;
+	qizo_mouse_report();
+}
 
 static u32 hist_first(void)
 {
@@ -465,6 +476,8 @@ static void banner_cmd(const char *arg)
 
 static const struct qizo_command cmds[NCMD] = {
 	{ "help", "this list, or help <command>", cmd_help },
+	{ "sysmngr", "memory, vram, volumes, drivers and versions", cmd_sysmngr },
+	{ "mouse", "ps2 mouse state and counters", cmd_mouse },
 	{ "info", "kernel and hardware summary", cmd_info },
 	{ "cpu", "cpu identity, features, clock", cmd_cpu },
 	{ "cpuid", "raw cpuid leaf, decimal number", cmd_cpuid },

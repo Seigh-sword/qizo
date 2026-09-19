@@ -324,3 +324,13 @@ void qizo_console_color(u32 attr)
 {
 	base_attr = attr & 0x0F;
 }
+
+void qizo_pad(const char *text, u32 width)
+{
+	u32 n = 0;
+
+	while (text && text[n])
+		n++;
+	while (n++ < width)
+		qizo_putc(' ');
+}

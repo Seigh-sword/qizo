@@ -19,8 +19,12 @@ cp build/artifacts/qizo.img "dist/qizo-$version.img"
 cp build/artifacts/qizo.iso "dist/qizo-$version.iso"
 cp build/artifacts/qizo.psf1 "dist/qizo-$version.psf1"
 cp build/qizo.elf "dist/qizo-$version-kernel.elf"
-xz -9kc -T0 build/artifacts/qizo.img > "dist/qizo-$version.img.xz"
-xz -9kc -T0 build/artifacts/qizo.iso > "dist/qizo-$version.iso.xz"
+if command -v xz >/dev/null 2>&1; then
+	xz -9kc -T0 build/artifacts/qizo.img > "dist/qizo-$version.img.xz"
+	xz -9kc -T0 build/artifacts/qizo.iso > "dist/qizo-$version.iso.xz"
+else
+	xz_note=" (no xz on the runner, compressed images not published)"
+fi
 gzip -9nc build/artifacts/qizo.img > "dist/qizo-$version.img.gz"
 
 for log in serial-disk.log serial-iso.log serial-console.log; do

@@ -26,8 +26,11 @@ KCFLAGS := -std=gnu11 -O3 $(QIZO_MARCH) -ffreestanding -fno-pic -fno-pie -no-pie
 KLDFLAGS := -m elf_x86_64 -n -static --build-id=none --no-dynamic-linker \
 	-z noexecstack -z max-page-size=0x1000
 XZ := xz -9e
+HAS_XZ := $(shell command -v xz >/dev/null 2>&1 && echo yes)
+XZ_ART := $(if $(HAS_XZ),$(ART)/qizo.img.xz $(ART)/qizo.iso.xz)
+XZ_NAMES := $(if $(HAS_XZ),qizo.img.xz qizo.iso.xz,)
 
-KERNEL_C := $(notdir $(wildcard $(KERNEL)/*.c) $(wildcard $(KERNEL)/lib/*.c))
+KERNEL_C := $(notdir $(wildcard $(KERNEL)/*.c) $(wildcard $(KERNEL)/lib/*.c) $(wildcard $(KERNEL)/drivers/*.c))
 KERNEL_OBJS := $(addprefix $(BUILD)/obj/,$(addsuffix .o,$(basename $(KERNEL_C))))
 ASM_OBJS := $(BUILD)/obj/boot64.o $(BUILD)/obj/idt.o $(BUILD)/obj/sse2.o
 FONT_HDR := $(BUILD)/include/qizo_font.h
@@ -35,7 +38,7 @@ FONT_PSF := $(ART)/qizo.psf1
 
 .PHONY: all img iso xz check dist clean help fonts test size
 
-all: $(ART)/qizo.iso $(ART)/qizo.img.xz $(ART)/qizo.iso.xz
+all: $(ART)/qizo.iso $(XZ_ART)
 
 $(BUILD)/obj $(BUILD)/include $(ART) $(BUILD)/boot:
 	@mkdir -p $@
@@ -59,6 +62,9 @@ $(FONT_HDR): $(TOOLS)/qizoartifacts/qizofontgen.py $(TOOLS)/common/qizofont.py |
 	$(PYTHON) $(TOOLS)/qizoartifacts/qizofontgen.py $@ $(FONT_PSF)
 
 $(BUILD)/obj/%.o: $(KERNEL)/%.c $(FONT_HDR) $(BUILD)/include/qizo_bootinfo.h | $(BUILD)/obj
+	$(CC) $(KCFLAGS) -c -o $@ $<
+
+$(BUILD)/obj/%.o: $(KERNEL)/drivers/%.c $(FONT_HDR) $(BUILD)/include/qizo_bootinfo.h | $(BUILD)/obj
 	$(CC) $(KCFLAGS) -c -o $@ $<
 
 $(BUILD)/obj/%.o: $(KERNEL)/lib/%.c $(FONT_HDR) $(BUILD)/include/qizo_bootinfo.h | $(BUILD)/obj
@@ -98,7 +104,8 @@ test:
 
 img: $(ART)/qizo.img
 iso: $(ART)/qizo.iso
-xz: $(ART)/qizo.img.xz $(ART)/qizo.iso.xz
+xz: $(XZ_ART)
+	$(if $(HAS_XZ),@:,@echo "qizo: no xz on this machine, images are published as they are")
 fonts: $(FONT_HDR)
 
 size: $(ART)/qizo.img
@@ -113,7 +120,7 @@ check: $(ART)/qizo.img $(ART)/qizo.iso
 
 dist: all
 	cp $(BUILD)/qizo.elf $(ART)/qizo-kernel.elf
-	cd $(ART) && sha256sum qizo.img qizo.iso qizo.img.xz qizo.iso.xz qizo-kernel.elf > SHA256SUMS
+	cd $(ART) && sha256sum qizo.img qizo.iso $(XZ_NAMES) qizo-kernel.elf > SHA256SUMS
 
 clean:
 	rm -rf $(BUILD)

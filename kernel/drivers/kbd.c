@@ -249,3 +249,24 @@ void qizo_kbd_interrupt(u8 code)
 	else
 		handle_set1(code);
 }
+
+int qizo_kbd_probe(void)
+{
+	u32 i;
+
+	for (i = 0; i < 200000; i++) {
+		if (!(qizo_inb(0x64) & 0x02))
+			return 1;
+	}
+	return 0;
+}
+
+void qizo_kbd_start(void)
+{
+	qizo_kbd_init();
+}
+
+const char *qizo_kbd_detail(void)
+{
+	return "i8042 ps2, irq1";
+}

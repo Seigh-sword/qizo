@@ -3,11 +3,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-need=(gcc as ld objcopy nm size make python3 xz)
+need=(gcc as ld objcopy nm size make python3)
 missing=()
 for tool in "${need[@]}"; do
 	command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
 done
+if command -v xz >/dev/null 2>&1; then
+	echo "qizo: xz found, compressed images will be built"
+else
+	echo "qizo: xz not installed, skipping the .xz artifacts"
+fi
 if [ ${#missing[@]} -ne 0 ]; then
 	echo "qizo: missing tools: ${missing[*]}" >&2
 	exit 1
