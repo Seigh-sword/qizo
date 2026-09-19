@@ -33,26 +33,31 @@ _start:
 	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
 drive_ok:
 	xorw %di, %di
-	xorw %cx, %cx
+	movb $0, QIZO_ARG_ADDR + QIZO_ARG_TRY
 	movw $qizo_cand, %si
 drive_try:
 	movw $0x55AA, %bx
 	movb $0x41, %ah
 	int $0x13
-	jnc drive_got
-	incw %cx
-	cmpw $4, %cx
-	jae drive_got
+	jnc drive_check
+	jmp drive_next
+drive_check:
+	cmpb $0x30, %ah
+	jne drive_next
+	testb $2, %cl
+	jnz drive_got
+drive_next:
+	incb QIZO_ARG_ADDR + QIZO_ARG_TRY
+	cmpb $4, QIZO_ARG_ADDR + QIZO_ARG_TRY
+	jae drive_none
 	lodsb
 	movb %al, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
 	movb %al, %dl
 	jmp drive_try
-drive_got:
-	cmpb $4, %cl
-	jb drive_sel
+drive_none:
 	movb QIZO_ARG_ADDR + QIZO_ARG_BOOTDRIVE, %dl
 	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
-drive_sel:
+drive_got:
 	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
 	movw $0x55AA, %bx
 	movb $0x41, %ah
