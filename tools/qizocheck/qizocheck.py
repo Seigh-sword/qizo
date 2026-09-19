@@ -130,6 +130,66 @@ def check_stage1_dap(path):
     return 0
 
 
+def decode_desc(b):
+    q = int.from_bytes(b, "little")
+    return dict(limit=(q & 0xFFFF) | ((q >> 32) & 0xF0000),
+                base=((q >> 16) & 0xFFFFFF) | ((q >> 56) & 0xFF) << 24,
+                access=(q >> 40) & 0xFF, flags=(q >> 48) & 0xFF,
+                g=(q >> 55) & 1, d=(q >> 54) & 1, l=(q >> 53) & 1)
+
+
+def check_stage2_gdt(data):
+    want = {0x08: (0x9A, 0, 1, 0), 0x10: (0x92, 0, 1, 0), 0x18: (0x9A, 0x20000, 0, 0),
+            0x28: (0x9A, 0, 1, 1), 0x30: (0x92, 0, 1, 0)}
+    gdtr = None
+    for i in range(len(data) - 6):
+        if struct.unpack_from("<H", data, i)[0] != 55:
+            continue
+        base = struct.unpack_from("<I", data, i + 2)[0]
+        if 0x20000 < base < 0x21000:
+            gdtr = base
+            break
+    if gdtr is None:
+        return fail("stage2 has no gdtr pseudo descriptor pointing inside the load area")
+    off = gdtr - 0x20000
+    for sel in sorted(want):
+        access, base_, g_, l_ = want[sel]
+        d = decode_desc(data[off + sel:off + sel + 8])
+        if d["access"] != access:
+            return fail("stage2 gdt selector 0x%02x has access byte 0x%02x, expected 0x%02x"
+                        % (sel, d["access"], access))
+        if d["base"] != base_:
+            return fail("stage2 gdt selector 0x%02x has base 0x%x, expected 0x%x: base 16:23"
+                        " occupies byte 4, not the access field" % (sel, d["base"], base_))
+        if d["g"] != g_ or d["l"] != l_:
+            return fail("stage2 gdt selector 0x%02x has the wrong granularity or mode bits" % sel)
+        if not (d["access"] & 0x80) or not (d["access"] & 0x10):
+            return fail("stage2 gdt selector 0x%02x is not a present code or data descriptor" % sel)
+    return 0
+
+
+def check_stage2_transition(data):
+    if b"\x66\x0f\x01" in data:
+        return fail("stage2 descriptor table load carries a 66 prefix, which selects the 10"
+                    " byte pseudo descriptor that 16 bit mode cannot use")
+    if b"\x0f\x01\x17" not in data:
+        return fail("stage2 has no 6 byte lgdt of the real mode form")
+    store = data.find(b"\x0f\x22\xc0")
+    if store < 0:
+        return fail("stage2 never writes cr0, so it cannot enable protected mode")
+    read = data.rfind(b"\x0f\x20\xc0", 0, store)
+    if read < 0:
+        return fail("stage2 writes cr0 without reading it first")
+    live = data[read + 3:store]
+    for byte, why in ((0xE8, "a call"), (0xB0, "a movb into al"), (0xB2, "a movb into dl")):
+        if byte in live:
+            return fail("stage2 puts %s inside the cr0 handoff, which destroys the pending"
+                        " value in eax" % why)
+    if data[store - 2:store] != b"\xc8\x01":
+        return fail("stage2 does not set bit 0 of cr0 immediately before the write")
+    return 0
+
+
 def check_iso(iso, image):
     S = 2048
     seen = {}
@@ -308,6 +368,10 @@ def main():
         s2 = ART.read(args.stage2)
         if s2[:3] != b"\xfa\xfc\x31":
             return fail("stage2 prologue missing")
+        if check_stage2_gdt(s2):
+            return 1
+        if check_stage2_transition(s2[:LY.STAGE2_BYTES]):
+            return 1
         print("qizo: stage2 %d bytes" % len(s2))
     if args.kernel_elf:
         syms = ART.nm(args.kernel_elf)
