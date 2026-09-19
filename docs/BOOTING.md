@@ -244,6 +244,28 @@ enable, far jump to the 16 bit code descriptor so the first fetch in the new mod
 descriptor the gdt supplied, load the data segments and the protected mode stack, then far jump
 to the 32 bit code descriptor. One jump changes one thing.
 
+### Stage2 fail codes
+
+The byte after `E` on the serial port is `QIZO_BOOTINFO + QIZO_BI_ERR`.
+
+| code | meaning |
+| --- | --- |
+| 0x11 | A20 line still aliased, so the high 64 KiB is not reachable |
+| 0x12 | no long mode (CPUID extended feature bit clear) |
+| 0x13 | EFLAGS.IF still set after `cli` |
+| 0x14 | no usable memory map (BIOS E820 failed or reported no RAM) |
+| 0x15 | malformed LZSS stream (input exhausted before the output was complete) |
+| 0x17 | adler of the loaded blob does not match the value stage1 carried |
+| 0x18 | decompressor bailed |
+| 0x19 | module magic after decompression |
+| 0x1a | kernel text size larger than `QIZO_KERNEL_MAX` |
+| 0x1b | kernel image size larger than `QIZO_KERNEL_MAX` |
+| 0x1c | kernel image size smaller than its own text size |
+| 0x1d | module magic wrong at the copy destination |
+
+Every one of these halts with `E` and the code, so a halted boot is a
+statement about the payload, not a silent crash.
+
 ## CPU exception report
 
 Every vector below 32 is a CPU exception and the kernel does not return from one:

@@ -397,29 +397,29 @@ ram_done:
 	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
 	movl QIZO_BOOTINFO + QIZO_BI_BLOB_SIZE, %ecx
 	cmpl QIZO_BOOTINFO + QIZO_BI_BLOB_CRC, %eax
-	jne fail32
+	jne fail_c1
 
 	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
 	movl QIZO_BOOTINFO + QIZO_BI_BLOB_SIZE, %ecx
 	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %edi
 	call qizo_decompress
 	testl %eax, %eax
-	je fail32
+	je fail_c2
 
 	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %edi
 	cmpl $QIZO_QIZOK_MAGIC, 0(%edi)
-	jne fail32
+	jne fail_c3
 	movl 4(%edi), %ecx
 	cmpl $QIZO_KERNEL_MAX, %ecx
-	ja fail32
+	ja fail_c4
 	movl 12(%edi), %eax
 	cmpl $QIZO_KERNEL_MAX, %eax
-	ja fail32
+	ja fail_c5
 	cmpl %ecx, %eax
-	jb fail32
+	jb fail_c6
 	movl 16(%edi), %eax
 	cmpl $QIZO_KTEXT, %eax
-	jne fail32
+	jne fail_c7
 	movl 8(%edi), %edx
 	cmpl %ecx, %edx
 	jae fail32
@@ -506,8 +506,35 @@ qizo_fail_pm:
 	hlt
 	jmp 24b
 
+fail_c1:
+	movb $0x17, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c2:
+	movb $0x18, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c3:
+	movb $0x19, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c4:
+	movb $0x1a, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c5:
+	movb $0x1b, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c6:
+	movb $0x1c, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c7:
+	movb $0x1d, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
 fail32:
-	movb $0x16, QIZO_BOOTINFO + QIZO_BI_ERR
 	movl %cr0, %eax
 	andl $0x7FFFFFFF, %eax
 	movl %eax, %cr0
@@ -548,8 +575,8 @@ qizo_long64:
 .code32
 
 qizo_adler:
-	xorl %eax, %eax
-	movl $1, %edi
+	movl $1, %eax
+	xorl %edi, %edi
 	testl %ecx, %ecx
 	je adler_done
 
@@ -628,17 +655,21 @@ decomp_match:
 	incl %ecx
 	andl $0xF, %eax
 	addl $3, %eax
-	movl %edi, %esi
-	subl %eax, %esi
-	xorl %eax, %eax
+	movl %edi, %ebp
+	subl %ecx, %ebp
+	pushl %eax
 
 decomp_copy:
-	movb (%esi), %al
+	popl %ecx
+	testl %ecx, %ecx
+	je decomp_top
+	movb (%ebp), %al
 	movb %al, (%edi)
-	incl %esi
+	incl %ebp
 	incl %edi
 	decl %ecx
 	jne decomp_copy
+	jmp decomp_top
 	movl QIZO_BOOTINFO + QIZO_BI_BLOB_PHYS, %esi
 	addl $8, %esi
 	jmp decomp_top
