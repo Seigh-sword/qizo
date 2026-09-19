@@ -45,19 +45,45 @@ _start:
 	movl %eax, %es:QIZO_BI_FLAGS
 	movb $0, %es:QIZO_BI_ERR
 
-	movb $0xAA, 0x4FF0
-	cmpb $0xAA, 0x0FF0
-	je a20_done
+	movb %ds:0x1FF0, %cl
+	movb %es:0x1FF0, %ch
+	movb $0x55, %al
+	movb %al, %es:0x1FF0
+	notb %al
+	movb %al, %ds:0x1FF0
+	cmpb %al, %es:0x1FF0
+	jne a20_on
 	inb $0x92, %al
 	orb $2, %al
 	outb %al, $0x92
-	movb $0x55, 0x4FF0
-	cmpb $0x55, 0x0FF0
-	je a20_done
-	movb $0, %es:QIZO_BI_A20
-	movb $0x11, %es:QIZO_BI_ERR
-	jmp qizo_fail16
+	inb $0xE8, %al
+	inb $0x92, %al
+	movb $0xAA, %al
+	movb %al, %ds:0x1FF0
+	cmpb %al, %es:0x1FF0
+	je a20_stuck
+a20_on:
+	movb %ch, %es:0x1FF0
+	movb %cl, %ds:0x1FF0
+	movb $1, %es:QIZO_BI_A20
+.if QIZO_BOOT_TRACE
+	movb $0x41, %al
+	call qizo_trace_putc
+	movb $0x31, %al
+	call qizo_trace_putc
+.endif
+	jmp a20_done
 
+a20_stuck:
+	movb %ch, %es:0x1FF0
+	movb %cl, %ds:0x1FF0
+	movb $0, %es:QIZO_BI_A20
+.if QIZO_BOOT_TRACE
+	movb $0x41, %al
+	call qizo_trace_putc
+	movb $0x30, %al
+	call qizo_trace_putc
+.endif
 a20_done:
 	movb $1, %es:QIZO_BI_A20
 	pushfl

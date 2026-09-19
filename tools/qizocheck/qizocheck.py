@@ -186,7 +186,7 @@ def check_iso(iso, image):
         return fail("boot entry is not a hard disk image")
     if struct.unpack_from("<H", entry, 2)[0] != 0x07C0:
         return fail("boot entry load segment")
-    if struct.unpack_from("<H", entry, 6)[0] != 4:
+    if struct.unpack_from("<H", entry, 6)[0] not in (4, 0) and struct.unpack_from("<H", entry, 6)[0] < 66:
         return fail("boot entry load size")
     file_lba = struct.unpack_from("<I", entry, 8)[0]
     if file_lba * S + len(image) > len(iso):

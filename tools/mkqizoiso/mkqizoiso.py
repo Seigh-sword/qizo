@@ -113,7 +113,7 @@ def build_iso(image, out, volume="QIZO"):
     struct.pack_into("<H", entry, 2, 0x07C0)
     entry[4] = 0
     entry[5] = 0
-    struct.pack_into("<H", entry, 6, 4)
+    struct.pack_into("<H", entry, 6, file_sectors if file_sectors < 0xFFFF else 0)
     struct.pack_into("<I", entry, 8, FILE_LBA)
     struct.pack_into("<I", entry, 12, 0)
 
