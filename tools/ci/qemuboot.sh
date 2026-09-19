@@ -34,11 +34,13 @@ probe() {
 report() {
 	local m pat vec rip hexc
 	seen=""
-	for m in stage1 stage2 pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic exc; do
+	for m in stage1 stage2 a20on a20off pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic exc; do
 		pat="$m"
 		case "$m" in
 			stage1) pat="1:" ;;
 			stage2) pat="2:" ;;
+			a20on) pat="A1" ;;
+			a20off) pat="A0" ;;
 			pm) pat="P" ;;
 			e820) pat="M" ;;
 			longmm) pat="L" ;;

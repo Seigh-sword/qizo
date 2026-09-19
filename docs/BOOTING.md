@@ -171,25 +171,36 @@ waits for the `qizo> ` prompt, which is the test that found this one.
 
 ## Boot markers
 
-Stage two drives COM1 at 115200 8N1 itself and writes one marker per stage, before
-it trusts anything of its own:
+Both loader stages drive COM1 at 115200 8N1 themselves and write one marker per step, so a
+boot that dies still says where. `tools/ci/qemuboot.sh` reads the bytes back and its
+annotation lists the markers it found plus the first bytes of the log as hex, because a
+message built out of guest bytes is not something the runner promises to deliver.
 
 | marker | meaning |
 |---|---|
+| `1:` | stage one is running, COM1 initialised |
+| `X<ah><cl><drive>` | the AH=41h answer, the support bitmap, and the drive chosen for reads |
+| `R` | one INT 13h chunk read without error |
+| `J` | the whole boot area is in, jumping to stage two |
+| `E<err><drive>` | stage one failed: the firmware code, then the drive number it used |
 | `2:` | stage two is running, COM1 initialised |
+| `A1` | the A20 gate was tested for aliasing and is open |
+| `A0` | the gate would not open; the boot continues and records it in bootinfo |
 | `P` | about to enter protected mode |
 | `M` | in protected mode, copying the E820 map |
 | `L` | page tables built, about to enter long mode |
 | `6` | in long mode, jumping to the kernel |
-| `E` + two hex digits | failed, the number is the `err` field of bootinfo |
+| `E` + two hex digits | stage two failed, the number is the `err` field of bootinfo |
 
-So `2:PML6` on the serial line means the bootloader did its whole job and the
-kernel took over. Nothing at all means stage one never got the disk read (its own
-error is on the screen, not the serial port). `E11` is A20, `E12` is no long mode,
-`E14` is no memory map, `E16` is a bad blob, header or decompression. Set
-`QIZO_BOOT_TRACE` to `0` in `boot/qizoboot.inc` to drop the markers and reclaim
-about 200 bytes of stage two.
-
+So `1:X300780RJ2:A1PML6` means the bootloader did its whole job and the kernel took over,
+and after it the kernel prints `console up`, `memory up`, `irqs live`, `calibrating`,
+`timer`, `reporting`, `shell` and then `qizo> `. A bare `1:` means the port works and
+nothing else does. `E01` from stage one is the firmware refusing the read, which is what a
+wrong packet, a wrong field offset, or a drive number the firmware does not watch all look
+like, so the marker carries the drive it used. `E11` is A20, `E12` is no long mode, `E13`
+is a CPU that cannot flip the interrupt flag, `E14` is no memory map, `E16` is a bad blob,
+header or decompression. Set `QIZO_BOOT_TRACE` to `0` in `boot/qizoboot.inc` to drop the
+markers and reclaim about 200 bytes of stage two.
 ## CPU exception report
 
 Every vector below 32 is a CPU exception and the kernel does not return from one:
