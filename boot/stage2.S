@@ -159,14 +159,22 @@ e820_done:
 	movw %ax, %ds
 	movw $(qizo_gdtr - _start), %bx
 	lgdtl (%bx)
+.if QIZO_BOOT_TRACE
+	movb $0x61, %al
+	call qizo_trace_putc
+.endif
 	movl $0x630, %eax
 	movl %eax, %cr4
 	movl %cr0, %eax
 	andl $0x9FFFFFFF, %eax
 	orl $1, %eax
-	movl %eax, %cr0
 .if QIZO_BOOT_TRACE
 	movb $0x50, %al
+	call qizo_trace_putc
+.endif
+	movl %eax, %cr0
+.if QIZO_BOOT_TRACE
+	movb $0x62, %al
 	call qizo_trace_putc
 .endif
 	ljmpl $0x08, $qizo_pm32
@@ -304,6 +312,19 @@ qizo_msg:
 
 .global qizo_pm32
 qizo_pm32:
+.if QIZO_BOOT_TRACE
+	movb $0x6D, %al
+	movl $4000, %ecx
+	movl $0x3FD, %edx
+30:	inb %dx, %al
+	andb $0x20, %al
+	jnz 31f
+	decl %ecx
+	jnz 30b
+31:	movb $0x6D, %al
+	movl $0x3F8, %edx
+	outb %al, %dx
+.endif
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %es

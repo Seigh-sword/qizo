@@ -75,7 +75,7 @@ report() {
 		probe_msg="$probe_msg rip=$rip"
 	fi
 	if [ -s "$log" ]; then
-		hexc=$(head -c 24 "$log" | od -An -tx1 | tr -dc '0-9a-f')
+		hexc=$(head -c 64 "$log" | od -An -tx1 | tr -dc '0-9a-f')
 		if [ -n "$hexc" ]; then
 			probe_msg="$probe_msg hex=$hexc"
 		fi
