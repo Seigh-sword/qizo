@@ -506,35 +506,8 @@ qizo_fail_pm:
 	hlt
 	jmp 24b
 
-fail_c1:
-	movb $0x17, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c2:
-	movb $0x18, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c3:
-	movb $0x19, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c4:
-	movb $0x1a, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c5:
-	movb $0x1b, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c6:
-	movb $0x1c, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
-fail_c7:
-	movb $0x1d, QIZO_BOOTINFO + QIZO_BI_ERR
-	jmp fail32
-
 fail32:
+	movb $0x16, QIZO_BOOTINFO + QIZO_BI_ERR
 	movl %cr0, %eax
 	andl $0x7FFFFFFF, %eax
 	movl %eax, %cr0
@@ -738,3 +711,33 @@ pdpt_fill:
 	decl %ecx
 	jne pdpt_fill
 	ret
+
+fail_c1:
+	movb $0x17, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c2:
+	movb $0x18, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c3:
+	movb $0x19, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c4:
+	movb $0x1a, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c5:
+	movb $0x1b, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c6:
+	movb $0x1c, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+fail_c7:
+	movb $0x1d, QIZO_BOOTINFO + QIZO_BI_ERR
+	jmp fail32
+
+
