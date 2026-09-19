@@ -64,10 +64,17 @@ report() {
 	if [ -f "$err" ] && grep -qaE 'error|failed|unsupported' "$err" 2>/dev/null; then
 		probe_msg="$probe_msg qemuerr"
 	fi
-	vec=$(sed -n 's/.*cpu exception \([0-9][0-9]*\).*/\1/p' "$log" 2>/dev/null | head -1)
-	vec=$(printf '%s' "$vec" | tr -dc '0-9')
+	vec=$(grep -am1 -oE '(^|[^0-9a-zA-Z])v= *[0-9]+' "$trace" 2>/dev/null | head -1 | tr -dc '0-9')
 	if [ -n "$vec" ]; then
 		probe_msg="$probe_msg vec=$vec"
+	fi
+	acode=$(grep -am1 -oE 'a= *[0-9a-fA-F]+' "$trace" 2>/dev/null | head -1 | sed -n 's/a= *\([0-9a-fA-F]*\)/\1/p')
+	if [ -n "$acode" ]; then
+		probe_msg="$probe_msg code=$acode"
+	fi
+	tfmt=$(head -1 "$trace" 2>/dev/null | tr -dc 'A-Za-z0-9 =:/._+-' | cut -c1-40)
+	if [ -n "$tfmt" ]; then
+		probe_msg="$probe_msg fmt=$tfmt"
 	fi
 	rip=$(sed -n 's/.*rip=\(0x[0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' "$log" 2>/dev/null | head -1)
 	rip=$(printf '%s' "$rip" | tr -dc '0-9a-f')
