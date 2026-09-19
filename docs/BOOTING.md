@@ -139,7 +139,15 @@ struct says, not what a comment claims, and SeaBIOS reads it as
         u64 lba;               // +8 starting sector
     };
 
-so the buffer address is at +4 and +6 and the block number starts at +8. Putting the
+so the buffer address is at +4 and +6 and the block number starts at +8.
+
+Where the packet *itself* is pointed at is the part no summary of the spec gets right, and
+it is the reason a boot can print 0x01 forever: the INT 13h AH=42h documentation says the
+firmware takes the packet address in ES:BX, and SeaBIOS reads it from **DS:SI** instead,
+dereferencing `(struct int13ext_s *)(regs->si+0)` with `GET_FARVAR(regs->ds, ...)`. Real
+firmware does one thing, the emulator does the other, and only a loader that sets both
+boots on both. stage1 puts the same paragraph aligned address in BX and SI before every
+call, and `make check` requires both stores in the disassembly. Putting the
 segment at +8 instead reads the transfer segment as the LBA, which for a load at 0x20000
 means asking for sector 8192 of a 4479 sector image, and the firmware answers with
 0x01 DISK_RET_EPARAM. The packet also has to sit on a 16 byte paragraph, which is why it

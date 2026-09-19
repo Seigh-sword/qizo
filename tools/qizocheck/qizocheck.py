@@ -119,8 +119,11 @@ def check_stage1_dap(path):
             return fail("stage1 never writes disk address packet field +%d" % off)
     if dap + 10 in dests:
         return fail("stage1 writes the lba high half at +10, seabios reads struct int13ext_s lba at +8")
-    if ("$0x%x,%%bx" % dap) not in out.replace(", ", ",").replace("0x07e00", "0x7e00"):
+    flat = out.replace(", ", ",").replace("0x07e00", "0x7e00")
+    if ("$0x%x,%%bx" % dap) not in flat:
         return fail("stage1 must hand the disk address packet to INT 13h in es:bx")
+    if ("$0x%x,%%si" % dap) not in flat:
+        return fail("stage1 must also put the packet in ds:si, which is where seabios reads it")
     if "int" not in out or "$0x13" not in out:
         return fail("stage1 has no int $0x13")
     print("qizo: stage1 disk address packet fields ok at %x" % dap)

@@ -77,6 +77,7 @@ drive_got:
 	popw %ax
 .endif
 	movw $QIZO_DAP_ADDR, %bx
+	movw $QIZO_DAP_ADDR, %si
 
 read_chunk:
 	movw QIZO_ARG_ADDR + QIZO_ARG_TOTAL, %ax
