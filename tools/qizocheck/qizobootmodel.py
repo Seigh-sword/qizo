@@ -42,11 +42,19 @@ class Mem:
 
 
 def int13_read(mem, disk, dap):
+    if dap % 16:
+        raise SystemExit("model: disk address packet not paragraph aligned")
+    if mem.u8(dap) != 0x10:
+        raise SystemExit("model: disk address packet size byte is not 0x10")
+    if mem.u16(dap + 4):
+        raise SystemExit("model: disk address packet reserved word is not zero")
     count = mem.u16(dap + 2)
-    off = mem.u16(dap + 4)
-    seg = mem.u16(dap + 6)
-    lba = mem.u32(dap + 8)
+    off = mem.u16(dap + 6)
+    seg = mem.u16(dap + 8)
+    lba = mem.u32(dap + 10)
     dest = seg * 16 + off
+    if count == 0 or count > 127:
+        raise SystemExit("model: sector count %d out of range" % count)
     src = disk[lba * LY.SECTOR:lba * LY.SECTOR + count * LY.SECTOR]
     if len(src) != count * LY.SECTOR:
         raise SystemExit("model: disk underrun at lba %d" % lba)
@@ -61,12 +69,14 @@ def stage1(mem, disk, drive):
     total = mem.u16(LY.QIZO["QIZO_ARG_ADDR"] + LY.QIZO["QIZO_ARG_TOTAL"])
     while bx < total:
         count = min(64, total - bx)
+        mem.put_u8(LY.QIZO["QIZO_DAP_ADDR"], 0x10)
         mem.put_u16(LY.QIZO["QIZO_DAP_ADDR"] + 2, count)
-        mem.put_u16(LY.QIZO["QIZO_DAP_ADDR"] + 4, 0)
-        mem.put_u16(LY.QIZO["QIZO_DAP_ADDR"] + 6, (LY.STAGE2 >> 4) + bx * 64)
-        mem.put_u32(LY.QIZO["QIZO_DAP_ADDR"] + 8,
+        lin = LY.STAGE2 + bx * LY.SECTOR
+        mem.put_u16(LY.QIZO["QIZO_DAP_ADDR"] + 6, lin & 0xF)
+        mem.put_u16(LY.QIZO["QIZO_DAP_ADDR"] + 8, lin >> 4)
+        mem.put_u32(LY.QIZO["QIZO_DAP_ADDR"] + 10,
                     mem.u32(LY.QIZO["QIZO_ARG_ADDR"] + LY.QIZO["QIZO_ARG_LBA"]) + bx)
-        mem.put_u32(LY.QIZO["QIZO_DAP_ADDR"] + 12, 0)
+        mem.put_u32(LY.QIZO["QIZO_DAP_ADDR"] + 14, 0)
         n, dest = int13_read(mem, disk, LY.QIZO["QIZO_DAP_ADDR"])
         if dest + n * LY.SECTOR > LY.BLOB_PHYS + LY.BLOB_MAX:
             raise SystemExit("model: read overruns the blob region")

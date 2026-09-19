@@ -1,6 +1,8 @@
 import argparse
 import os
+import shutil
 import struct
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "common"))
@@ -86,6 +88,41 @@ def check_fs(img, kernel, stage2=None):
 
 def fat16(img, fat_off_bytes, index):
     return struct.unpack_from("<H", img, fat_off_bytes + index * 2)[0]
+
+
+def check_stage1_dap(path):
+    dap = LY.g("QIZO_DAP_ADDR")
+    if dap % 16:
+        return fail("stage1 disk address packet at %x is not paragraph aligned" % dap)
+    if not shutil.which("objdump"):
+        print("qizo: stage1 disk address packet at %x, alignment ok (no objdump)" % dap)
+        return 0
+    out = subprocess.run(["objdump", "-D", "-b", "binary", "-m", "i8086",
+                          "--adjust-vma=0x7c00", path],
+                         capture_output=True, text=True).stdout
+    dests = set()
+    for line in out.splitlines():
+        line = line.strip()
+        if not line or "\t" not in line:
+            continue
+        text = line.rsplit("\t", 1)[-1]
+        if not text.startswith("mov"):
+            continue
+        tail = text.rsplit(",", 1)[-1].strip()
+        if tail.startswith("0x"):
+            try:
+                dests.add(int(tail, 16))
+            except ValueError:
+                pass
+    for off in (0, 2, 4, 6, 8, 10, 14):
+        if dap + off not in dests:
+            return fail("stage1 never writes disk address packet field +%d" % off)
+    if dap + 12 in dests:
+        return fail("stage1 writes disk address packet field +12, the lba is a qword at +10")
+    if "int" not in out or "$0x13" not in out:
+        return fail("stage1 has no int $0x13")
+    print("qizo: stage1 disk address packet fields ok at %x" % dap)
+    return 0
 
 
 def check_iso(iso, image):
@@ -260,6 +297,8 @@ def main():
         if s1[STAGE1_ARGS + 8:STAGE1_ARGS + 12] != b"\0\0\0\0":
             return fail("stage1 template has a non-zero argument block")
         print("qizo: stage1 is one clean sector, args patched by the image tool")
+        if check_stage1_dap(args.stage1):
+            return 1
     if args.stage2:
         s2 = ART.read(args.stage2)
         if s2[:3] != b"\xfa\xfc\x31":

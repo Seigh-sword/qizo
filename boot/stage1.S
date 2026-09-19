@@ -22,6 +22,8 @@ _start:
 	movw $0x7A00, %sp
 	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
 	movb $0, QIZO_ARG_ADDR + QIZO_ARG_ERR
+	movb	$0x10, QIZO_DAP_ADDR
+	movb	$0, QIZO_DAP_ADDR + 1
 	movw $QIZO_DAP_ADDR, %si
 	xorw %bx, %bx
 
@@ -34,19 +36,25 @@ read_chunk:
 	movw $64, %ax
 
 chunk_set:
-	movw %ax, QIZO_DAP_ADDR + 2
-	movw $0, QIZO_DAP_ADDR + 4
-	movw %bx, %ax
-	shlw $5, %ax
-	addw $QIZO_STAGE2_SEG, %ax
-	movw %ax, QIZO_DAP_ADDR + 6
-	movl QIZO_ARG_ADDR + QIZO_ARG_LBA, %eax
-	addl %ebx, %eax
-	movl %eax, QIZO_DAP_ADDR + 8
-	movl $0, QIZO_DAP_ADDR + 12
-	movb $0x42, %ah
-	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
-	int $0x13
+	movw	%ax, QIZO_DAP_ADDR + 2
+	movw	$0, QIZO_DAP_ADDR + 4
+	movl	%ebx, %eax
+	shll	$9, %eax
+	movl	$QIZO_STAGE2_SEG, %edx
+	shll	$4, %edx
+	addl	%edx, %eax
+	movl	%eax, %ecx
+	shrl	$4, %eax
+	movw	%ax, QIZO_DAP_ADDR + 8
+	andl	$0x000F, %ecx
+	movw	%cx, QIZO_DAP_ADDR + 6
+	movl	QIZO_ARG_ADDR + QIZO_ARG_LBA, %eax
+	addl	%ebx, %eax
+	movl	%eax, QIZO_DAP_ADDR + 10
+	movl	$0, QIZO_DAP_ADDR + 14
+	movb	$0x42, %ah
+	movb	QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
+	int	$0x13
 	jnc read_ok
 	movb $0x01, QIZO_ARG_ADDR + QIZO_ARG_ERR
 	jmp boot_fail
@@ -132,11 +140,5 @@ qizo_args:
 	.long 0
 	.byte 0
 	.byte 0, 0, 0
-qizo_dap:
-	.byte 0x10
-	.byte 0
-	.word 0
-	.word 0
-	.word 0
 	.long 0
 	.long 0

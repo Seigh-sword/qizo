@@ -109,6 +109,7 @@ bit clear means a literal byte.
 | address | use |
 |---|---|
 | 0x7C00..0x7DFF | stage1 and its 512 byte sector |
+| 0x7E00 | INT 13h AH=42h disk address packet, paragraph aligned |
 | 0x10000..0x106FF | bootinfo |
 | 0x20000..0x20FFF | stage2 code |
 | 0x21000.. | blob, up to 124 KiB |
@@ -124,6 +125,30 @@ there is written to the graphics card and read back as display memory, and the r
 0x9FC00 belongs to the extended BIOS data area. The load area therefore sits at 0x20000,
 inside ordinary conventional RAM, clear of the IVT, the BIOS data area, the MBR and the
 EBDA, and it still leaves the whole first megabyte reserved by the frame allocator.
+
+### The disk address packet
+
+stage1 reads the boot area with INT 13h AH=42h, whose packet layout is fixed by the
+interface and cannot be redefined by an assembler or by a Python model:
+
+| offset | size | field |
+|---|---|---|
+| 0 | byte | packet size, 0x10 |
+| 1 | byte | reserved, zero |
+| 2 | word | sectors to read |
+| 4 | word | reserved, zero |
+| 6 | word | buffer offset |
+| 8 | word | buffer segment |
+| 10 | qword | starting LBA |
+
+The packet has to sit on a 16 byte paragraph, which is why it lives at 0x7E00 right after
+the MBR copy instead of in the tail of the sector: 0x7C00+484 is four bytes past a
+paragraph, and firmware is entitled to refuse an unaligned packet. Writing the LBA at +8
+instead of +10 is worse than a failure, because the read still succeeds: the segment field
+picks up the LBA, the block number reads as zero, and the loader happily copies the volume
+boot sector over low memory and reports success. `make check` disassembles stage1, requires
+a store to every one of those fields, and rejects a store at +12, so the layout is pinned
+by a test and not by memory.
 
 `tools/qizocheck/qizobootmodel.py` re-runs the whole chain in Python against the built image
 and fails if any region overlaps, so these numbers stay honest. It cannot catch a load

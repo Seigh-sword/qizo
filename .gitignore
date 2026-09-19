@@ -10,3 +10,9 @@ __pycache__/
 dist/
 .qizo-boot-*.status
 serial-*.log
+
+qemu-*.err
+qemu-*.trace
+bios-*.log
+qizo-console-*.txt
+.qizo-boot-*.probe
