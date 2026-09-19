@@ -85,7 +85,6 @@ a20_stuck:
 	call qizo_trace_putc
 .endif
 a20_done:
-	movb $1, %es:QIZO_BI_A20
 	pushfl
 	popw %ax
 	xorw $0x200, %ax
@@ -94,7 +93,8 @@ a20_done:
 	pushfl
 	popw %ax
 	testw $0x200, %ax
-	je fail_nocpu
+	je fail_noflags
+	cli
 	xorl %eax, %eax
 	cpuid
 	movl %eax, %es:QIZO_BI_CPUID_MAX
@@ -107,6 +107,10 @@ a20_done:
 
 fail_nocpu:
 	movb $0x12, %es:QIZO_BI_ERR
+	jmp qizo_fail16
+
+fail_noflags:
+	movb $0x13, %es:QIZO_BI_ERR
 	jmp qizo_fail16
 
 e820_start:
@@ -122,14 +126,14 @@ e820_start:
 e820_next:
 	cmpl $QIZO_E820_MAX, %ebp
 	jae e820_done
-	movl $0x534D4150, %ecx
+	movl $QIZO_E820_ENT, %ecx
 	movl $0xE820, %eax
-	xorl %edx, %edx
+	movl $0x534D4150, %edx
 	int $0x15
 	jc e820_check
-	cmpl $0x534D4150, 0x14(%di)
+	cmpl $0x534D4150, %eax
 	jne e820_check
-	cmpl $0x14, %eax
+	cmpl $20, %ecx
 	jb e820_check
 	addw $QIZO_E820_ENT, %di
 	incw %bp
@@ -140,6 +144,8 @@ e820_next:
 e820_check:
 	testl %ebp, %ebp
 	jne e820_done
+	movw $QIZO_BOOTINFO_SEG, %ax
+	movw %ax, %es
 	movb $0x14, %es:QIZO_BI_ERR
 	jmp qizo_fail16
 
