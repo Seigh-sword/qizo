@@ -24,12 +24,12 @@ _start:
 	movb $0, QIZO_ARG_ADDR + QIZO_ARG_ERR
 	movb	$0x10, QIZO_DAP_ADDR
 	movb	$0, QIZO_DAP_ADDR + 1
-	movw $QIZO_DAP_ADDR, %si
-	xorw %bx, %bx
+	movw $QIZO_DAP_ADDR, %bx
+	xorw %di, %di
 
 read_chunk:
 	movw QIZO_ARG_ADDR + QIZO_ARG_TOTAL, %ax
-	subw %bx, %ax
+	subw %di, %ax
 	jbe go_stage2
 	cmpw $64, %ax
 	jbe chunk_set
@@ -38,7 +38,7 @@ read_chunk:
 chunk_set:
 	movw	%ax, QIZO_DAP_ADDR + 2
 	movw	$0, QIZO_DAP_ADDR + 4
-	movl	%ebx, %eax
+	movl	%edi, %eax
 	shll	$9, %eax
 	movl	$QIZO_STAGE2_SEG, %edx
 	shll	$4, %edx
@@ -49,14 +49,14 @@ chunk_set:
 	andl	$0x000F, %ecx
 	movw	%cx, QIZO_DAP_ADDR + 6
 	movl	QIZO_ARG_ADDR + QIZO_ARG_LBA, %eax
-	addl	%ebx, %eax
+	addl	%edi, %eax
 	movl	%eax, QIZO_DAP_ADDR + 10
 	movl	$0, QIZO_DAP_ADDR + 14
 	movb	$0x42, %ah
 	movb	QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
 	int	$0x13
 	jnc read_ok
-	movb $0x01, QIZO_ARG_ADDR + QIZO_ARG_ERR
+	movb %ah, QIZO_ARG_ADDR + QIZO_ARG_ERR
 	jmp boot_fail
 
 read_ok:
@@ -66,7 +66,7 @@ read_ok:
 	outb %al, %dx
 .endif
 	movw QIZO_DAP_ADDR + 2, %ax
-	addw %ax, %bx
+	addw %ax, %di
 	jmp read_chunk
 
 go_stage2:
@@ -80,8 +80,13 @@ go_stage2:
 boot_fail:
 .if QIZO_BOOT_TRACE
 	movb $0x45, %al
-	movw $0x3F8, %dx
-	outb %al, %dx
+	call qizo_tty
+	movb QIZO_ARG_ADDR + QIZO_ARG_ERR, %al
+	shrb $4, %al
+	call qizo_tty_hex
+	movb QIZO_ARG_ADDR + QIZO_ARG_ERR, %al
+	andb $0x0F, %al
+	call qizo_tty_hex
 .endif
 	movw $(qizo_fail_msg - _start), %si
 	xorw %bx, %bx
@@ -100,6 +105,22 @@ print:
 halt:
 	hlt
 	jmp halt
+
+qizo_tty:
+	movw $0x3F8, %dx
+	outb %al, %dx
+	ret
+
+qizo_tty_hex:
+	cmpb $9, %al
+	jbe tty_dec
+	addb $0x37, %al
+	jmp tty_out
+tty_dec:
+	addb $0x30, %al
+tty_out:
+	call qizo_tty
+	ret
 
 qizo_fail_msg:
 	.asciz "QIZO STAGE1 DISK ERR"

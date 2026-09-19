@@ -119,6 +119,8 @@ def check_stage1_dap(path):
             return fail("stage1 never writes disk address packet field +%d" % off)
     if dap + 12 in dests:
         return fail("stage1 writes disk address packet field +12, the lba is a qword at +10")
+    if ("$0x%x,%%bx" % dap) not in out.replace(", ", ",").replace("0x07e00", "0x7e00"):
+        return fail("stage1 must hand the disk address packet to INT 13h in es:bx")
     if "int" not in out or "$0x13" not in out:
         return fail("stage1 has no int $0x13")
     print("qizo: stage1 disk address packet fields ok at %x" % dap)
