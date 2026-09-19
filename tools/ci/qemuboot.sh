@@ -64,7 +64,10 @@ report() {
 	if [ -f "$err" ] && grep -qaE 'error|failed|unsupported' "$err" 2>/dev/null; then
 		probe_msg="$probe_msg qemuerr"
 	fi
-	vec=$(grep -am1 -oE '(^|[^0-9a-zA-Z])v= *[0-9]+' "$trace" 2>/dev/null | head -1 | tr -dc '0-9')
+	vec=$(grep -am1 -oE 'new 0x[0-9a-fA-F]+' "$trace" 2>/dev/null | head -1 | sed -n 's/.*0x\([0-9a-fA-F]*\)/\1/p')
+	if [ -z "$vec" ]; then
+		vec=$(grep -am1 -oE '(^|[^0-9a-zA-Z])v= *[0-9]+' "$trace" 2>/dev/null | head -1 | tr -dc '0-9')
+	fi
 	if [ -n "$vec" ]; then
 		probe_msg="$probe_msg vec=$vec"
 	fi
