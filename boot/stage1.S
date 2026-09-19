@@ -24,8 +24,30 @@ _start:
 	movb $0, QIZO_ARG_ADDR + QIZO_ARG_ERR
 	movb	$0x10, QIZO_DAP_ADDR
 	movb	$0, QIZO_DAP_ADDR + 1
+	cmpb $0x80, %dl
+	jae drive_ok
+	cmpb $0xE0, %dl
+	jae drive_ok
+	movb $0x80, %dl
+	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
+drive_ok:
 	movw $QIZO_DAP_ADDR, %bx
 	xorw %di, %di
+.if QIZO_BOOT_TRACE
+	pushw %bx
+	pushw %dx
+	movw $0x55AA, %bx
+	movb $0x41, %ah
+	int $0x13
+	movb $0x58, %al
+	call qizo_tty
+	movb %ah, %al
+	call qizo_tty_byte
+	movb %cl, %al
+	call qizo_tty_byte
+	popw %dx
+	popw %bx
+.endif
 
 read_chunk:
 	movw QIZO_ARG_ADDR + QIZO_ARG_TOTAL, %ax
@@ -82,11 +104,9 @@ boot_fail:
 	movb $0x45, %al
 	call qizo_tty
 	movb QIZO_ARG_ADDR + QIZO_ARG_ERR, %al
-	shrb $4, %al
-	call qizo_tty_hex
-	movb QIZO_ARG_ADDR + QIZO_ARG_ERR, %al
-	andb $0x0F, %al
-	call qizo_tty_hex
+	call qizo_tty_byte
+	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %al
+	call qizo_tty_byte
 .endif
 	movw $(qizo_fail_msg - _start), %si
 	xorw %bx, %bx
@@ -111,7 +131,16 @@ qizo_tty:
 	outb %al, %dx
 	ret
 
-qizo_tty_hex:
+qizo_tty_byte:
+	movb %al, %ah
+	shrb $4, %al
+	call qizo_tty_nibble
+	movb %ah, %al
+	andb $0x0F, %al
+	call qizo_tty_nibble
+	ret
+
+qizo_tty_nibble:
 	cmpb $9, %al
 	jbe tty_dec
 	addb $0x37, %al
