@@ -31,23 +31,41 @@ _start:
 	movb $0x80, %dl
 	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
 drive_ok:
-	movw $QIZO_DAP_ADDR, %bx
 	xorw %di, %di
-.if QIZO_BOOT_TRACE
-	pushw %bx
-	pushw %dx
+	xorw %cx, %cx
+	movw $qizo_cand, %si
+drive_try:
 	movw $0x55AA, %bx
 	movb $0x41, %ah
 	int $0x13
+	jnc drive_got
+	incw %cx
+	cmpw $4, %cx
+	jae drive_got
+	lodsb
+	movb %al, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
+	movb %al, %dl
+	jmp drive_try
+drive_got:
+	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
+	movw $0x55AA, %bx
+	movb $0x41, %ah
+	int $0x13
+.if QIZO_BOOT_TRACE
+	pushw %ax
+	pushw %cx
 	movb $0x58, %al
 	call qizo_tty
 	movb %ah, %al
 	call qizo_tty_byte
 	movb %cl, %al
 	call qizo_tty_byte
-	popw %dx
-	popw %bx
+	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %al
+	call qizo_tty_byte
+	popw %cx
+	popw %ax
 .endif
+	movw $QIZO_DAP_ADDR, %bx
 
 read_chunk:
 	movw QIZO_ARG_ADDR + QIZO_ARG_TOTAL, %ax
@@ -108,7 +126,7 @@ boot_fail:
 	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %al
 	call qizo_tty_byte
 .endif
-	movw $(qizo_fail_msg - _start), %si
+	movw $qizo_fail_msg, %si
 	xorw %bx, %bx
 	jmp print
 
@@ -153,6 +171,9 @@ tty_out:
 
 qizo_fail_msg:
 	.asciz "QIZO STAGE1 DISK ERR"
+
+qizo_cand:
+	.byte 0x80, 0xE8, 0xF0, 0xF8
 
 .if QIZO_BOOT_TRACE
 qizo_com1_init:
