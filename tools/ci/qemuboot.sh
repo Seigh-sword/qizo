@@ -32,7 +32,7 @@ probe() {
 }
 
 report() {
-	local m pat vec rip
+	local m pat vec rip hexc
 	seen=""
 	for m in stage1 stage2 pm e820 longmm jump6 con mem irq cal timer rep shell prompt panic exc; do
 		pat="$m"
@@ -71,6 +71,12 @@ report() {
 	rip=$(printf '%s' "$rip" | tr -dc '0-9a-f')
 	if [ -n "$rip" ]; then
 		probe_msg="$probe_msg rip=$rip"
+	fi
+	if [ -s "$log" ]; then
+		hexc=$(head -c 16 "$log" | od -An -tx1 | tr -dc '0-9a-f')
+		if [ -n "$hexc" ]; then
+			probe_msg="$probe_msg hex=$hexc"
+		fi
 	fi
 	printf 'qizo %s: %s\n' "$tag" "$probe_msg" >".qizo-boot-$tag.probe"
 }
