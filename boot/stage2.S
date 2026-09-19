@@ -158,7 +158,7 @@ e820_done:
 	movw $QIZO_STAGE2_SEG, %ax
 	movw %ax, %ds
 	movw $(qizo_gdtr - _start), %bx
-	lgdtl (%bx)
+	lgdt (%bx)
 .if QIZO_BOOT_TRACE
 	movb $0x61, %al
 	call qizo_trace_putc
