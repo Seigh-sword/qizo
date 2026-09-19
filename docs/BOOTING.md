@@ -186,7 +186,9 @@ message built out of guest bytes is not something the runner promises to deliver
 | `2:` | stage two is running, COM1 initialised |
 | `A1` | the A20 gate was tested for aliasing and is open |
 | `A0` | the gate would not open; the boot continues and records it in bootinfo |
-| `P` | about to enter protected mode |
+| `a` | the descriptor table pointer is loaded |
+| `P` | protection enable is committed, the cpu is in protected mode |
+| `m` | a far jump loaded a descriptor and its first instruction ran |
 | `M` | in protected mode, copying the E820 map |
 | `L` | page tables built, about to enter long mode |
 | `6` | in long mode, jumping to the kernel |
@@ -201,6 +203,47 @@ like, so the marker carries the drive it used. `E11` is A20, `E12` is no long mo
 is a CPU that cannot flip the interrupt flag, `E14` is no memory map, `E16` is a bad blob,
 header or decompression. Set `QIZO_BOOT_TRACE` to `0` in `boot/qizoboot.inc` to drop the
 markers and reclaim about 200 bytes of stage two.
+### How to read a boot that stops
+
+A boot that dies still says where it died. Four things about these instructions are worth
+knowing before changing any of them, because each looks correct in the source and wrong to
+the cpu, and each one cost a real boot attempt.
+
+- A descriptor is bytes in a fixed order, and it is not the order the words suggest: limit
+  0:15 at byte 0, base 0:15 at byte 2, **base 16:23 at byte 4**, access at byte 5, flags
+  with limit 16:19 at byte 6, base 24:31 at byte 7. Byte 4 belongs to the base, not to the
+  attributes. `ff ff 00 00 9a cf 00 00` therefore puts the access byte where base bits
+  16:23 live, which the cpu reads as a present segment of type 0xf at base 0x9a0000, and
+  `long 0xFFFFFFFF, 0x00CF9A00` puts a base of 0xffff in the low word for the same reason.
+  Both are one byte away from correct, which is far enough for the jump into protected mode
+  to fault with vector 13. `make check` decodes the table with the bit positions the cpu
+  uses and refuses the build when a selector does not describe what this file claims it
+  does, so the check is the thing that has to be edited when a layout deliberately changes.
+- `lgdt` in 16 bit mode takes a six byte pseudo descriptor, limit then a 32 bit base. The
+  `l` suffix makes the assembler add a 66 operand size override, and an overridden `lgdt`
+  reads a *ten* byte form with a 64 bit base, so the base runs two bytes past the field
+  into the code that follows and the installed table pointer is garbage. The bare `lgdt` is
+  the right mnemonic here. In 64 bit mode the ten byte form is the only one, which is why
+  the kernel writes the same looking instruction with a quad sized pointer on purpose.
+- A trace marker is a call, and calls clobber registers. The real mode helper takes its
+  character in `%al`, so a marker placed between the `or` that sets protection enable and
+  the store that commits it clears bit 0 of the value being written: the boot then prints a
+  success marker for a mode switch that never happened and every conclusion drawn from it
+  is wrong. Markers go after the instruction they describe, never inside a register
+  handoff, and stage2 saves `%ax` across the one that follows the cr0 store.
+- A new mode needs its stack before its first push. Entering protected mode does not change
+  `SS`, and the value stage one uses throughout is the null descriptor there, so a `pushal`
+  as the first protected mode instruction faults before anything can report it, and with no
+  idt loaded the fault on the fault is a reset that repeats as fast as the emulator can
+  spin. Each mode in stage2 loads its segments and stack pointer first, then writes its
+  marker straight to the port with no call and no stack, because a 16 bit routine reached
+  from 32 bit code executes as 32 bit instructions.
+
+The sequence all of this supports is: load the descriptor table, set `cr4`, commit protection
+enable, far jump to the 16 bit code descriptor so the first fetch in the new mode comes from a
+descriptor the gdt supplied, load the data segments and the protected mode stack, then far jump
+to the 32 bit code descriptor. One jump changes one thing.
+
 ## CPU exception report
 
 Every vector below 32 is a CPU exception and the kernel does not return from one:
