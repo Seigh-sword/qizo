@@ -128,27 +128,33 @@ EBDA, and it still leaves the whole first megabyte reserved by the frame allocat
 
 ### The disk address packet
 
-stage1 reads the boot area with INT 13h AH=42h, whose packet layout is fixed by the
-interface and cannot be redefined by an assembler or by a Python model:
+stage1 reads the boot area with INT 13h AH=42h. The packet layout is what the firmware
+struct says, not what a comment claims, and SeaBIOS reads it as
 
-| offset | size | field |
-|---|---|---|
-| 0 | byte | packet size, 0x10 |
-| 1 | byte | reserved, zero |
-| 2 | word | sectors to read |
-| 4 | word | reserved, zero |
-| 6 | word | buffer offset |
-| 8 | word | buffer segment |
-| 10 | qword | starting LBA |
+    struct int13ext_s {
+        u8  size;              // +0, must be 0x10
+        u8  reserved;          // +1, must be 0
+        u16 count;             // +2, sectors to transfer
+        struct segoff_s data;  // +4 buffer offset, +6 buffer segment
+        u64 lba;               // +8 starting sector
+    };
 
-The packet has to sit on a 16 byte paragraph, which is why it lives at 0x7E00 right after
-the MBR copy instead of in the tail of the sector: 0x7C00+484 is four bytes past a
-paragraph, and firmware is entitled to refuse an unaligned packet. Writing the LBA at +8
-instead of +10 is worse than a failure, because the read still succeeds: the segment field
-picks up the LBA, the block number reads as zero, and the loader happily copies the volume
-boot sector over low memory and reports success. `make check` disassembles stage1, requires
-a store to every one of those fields, and rejects a store at +12, so the layout is pinned
-by a test and not by memory.
+so the buffer address is at +4 and +6 and the block number starts at +8. Putting the
+segment at +8 instead reads the transfer segment as the LBA, which for a load at 0x20000
+means asking for sector 8192 of a 4479 sector image, and the firmware answers with
+0x01 DISK_RET_EPARAM. The packet also has to sit on a 16 byte paragraph, which is why it
+lives at 0x7E00 right after the MBR copy rather than in the tail of the sector, where the
+next free offset is four bytes past a paragraph.
+
+Before the first read stage1 asks AH=41h with BX=0x55AA which drive actually supports
+extended reads, starting from the drive the BIOS entered the MBR with and falling back to
+0x80, 0xE8, 0xF0 and 0xF8, because QEMU's firmware hands an El Torito boot the CD-ROM
+number rather than a hard disk number, and a read of a drive the BIOS does not know is
+answered with the same 0x01. The number it settled on is what stage2 and the kernel boot
+info are told to use, and the serial marker prints the probe answer and the chosen drive.
+
+`make check` disassembles stage1 and requires a store at +0, +2, +4, +6, +8 and +12, and
+fails on a store at +10, so the field order is a tested contract and not a memory.
 
 `tools/qizocheck/qizobootmodel.py` re-runs the whole chain in Python against the built image
 and fails if any region overlaps, so these numbers stay honest. It cannot catch a load

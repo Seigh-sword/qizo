@@ -114,11 +114,11 @@ def check_stage1_dap(path):
                 dests.add(int(tail, 16))
             except ValueError:
                 pass
-    for off in (0, 2, 4, 6, 8, 10, 14):
+    for off in (0, 2, 4, 6, 8, 12):
         if dap + off not in dests:
             return fail("stage1 never writes disk address packet field +%d" % off)
-    if dap + 12 in dests:
-        return fail("stage1 writes disk address packet field +12, the lba is a qword at +10")
+    if dap + 10 in dests:
+        return fail("stage1 writes the lba high half at +10, seabios reads struct int13ext_s lba at +8")
     if ("$0x%x,%%bx" % dap) not in out.replace(", ", ",").replace("0x07e00", "0x7e00"):
         return fail("stage1 must hand the disk address packet to INT 13h in es:bx")
     if "int" not in out or "$0x13" not in out:

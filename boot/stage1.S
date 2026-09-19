@@ -21,6 +21,7 @@ _start:
 	movw %ax, %ss
 	movw $0x7A00, %sp
 	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
+	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_BOOTDRIVE
 	movb $0, QIZO_ARG_ADDR + QIZO_ARG_ERR
 	movb	$0x10, QIZO_DAP_ADDR
 	movb	$0, QIZO_DAP_ADDR + 1
@@ -47,6 +48,11 @@ drive_try:
 	movb %al, %dl
 	jmp drive_try
 drive_got:
+	cmpb $4, %cl
+	jb drive_sel
+	movb QIZO_ARG_ADDR + QIZO_ARG_BOOTDRIVE, %dl
+	movb %dl, QIZO_ARG_ADDR + QIZO_ARG_DRIVE
+drive_sel:
 	movb QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
 	movw $0x55AA, %bx
 	movb $0x41, %ah
@@ -77,7 +83,6 @@ read_chunk:
 
 chunk_set:
 	movw	%ax, QIZO_DAP_ADDR + 2
-	movw	$0, QIZO_DAP_ADDR + 4
 	movl	%edi, %eax
 	shll	$9, %eax
 	movl	$QIZO_STAGE2_SEG, %edx
@@ -85,13 +90,13 @@ chunk_set:
 	addl	%edx, %eax
 	movl	%eax, %ecx
 	shrl	$4, %eax
-	movw	%ax, QIZO_DAP_ADDR + 8
+	movw	%ax, QIZO_DAP_ADDR + 6
 	andl	$0x000F, %ecx
-	movw	%cx, QIZO_DAP_ADDR + 6
+	movw	%cx, QIZO_DAP_ADDR + 4
 	movl	QIZO_ARG_ADDR + QIZO_ARG_LBA, %eax
 	addl	%edi, %eax
-	movl	%eax, QIZO_DAP_ADDR + 10
-	movl	$0, QIZO_DAP_ADDR + 14
+	movl	%eax, QIZO_DAP_ADDR + 8
+	movl	$0, QIZO_DAP_ADDR + 12
 	movb	$0x42, %ah
 	movb	QIZO_ARG_ADDR + QIZO_ARG_DRIVE, %dl
 	int	$0x13
