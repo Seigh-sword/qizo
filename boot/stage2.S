@@ -431,7 +431,7 @@ ram_done:
 	movl %eax, QIZO_BOOTINFO + QIZO_BI_KERNEL_BSS
 
 	movl QIZO_BOOTINFO + QIZO_BI_SCRATCH, %esi
-	addl $(QIZO_QIZOK_HDR + 8), %esi
+	addl $QIZO_QIZOK_HDR, %esi
 	movl QIZO_BOOTINFO + QIZO_BI_KTEXT, %edi
 	movl QIZO_BOOTINFO + QIZO_BI_KERNEL_SIZE, %ecx
 	call qizo_copy

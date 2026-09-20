@@ -3,7 +3,8 @@
 
 .macro MARK ch
 	movb $\ch, %al
-	call qizo_bootmark
+	movl $0x3F8, %edx
+	outb %al, %dx
 .endm
 
 .set QIZO_PG_SIZE, 0x6000
@@ -15,9 +16,9 @@
 .global qizo_kernel_entry
 .type qizo_kernel_entry, @function
 qizo_kernel_entry:
+	MARK 0x45
 	cli
 	cld
-	MARK 0x45
 	movq %rdi, %rbx
 	movq $qizo_boot_stack + QIZO_STACK_BYTES, %rsp
 	andq $-16, %rsp
@@ -34,25 +35,6 @@ qizo_kernel_entry:
 	jmp qizo_hlt_loop
 .size qizo_kernel_entry, . - qizo_kernel_entry
 
-qizo_bootmark:
-	pushq %rcx
-	pushq %rdx
-	pushq %rax
-	movl $0x3FD, %edx
-	movl $20000, %ecx
-1:
-	inb %dx, %al
-	testb $0x20, %al
-	jnz 2f
-	decl %ecx
-	jnz 1b
-2:
-	popq %rax
-	movl $0x3F8, %edx
-	outb %al, %dx
-	popq %rdx
-	popq %rcx
-	ret
 
 .global qizo_paging_setup
 .type qizo_paging_setup, @function

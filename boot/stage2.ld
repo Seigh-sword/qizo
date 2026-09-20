@@ -7,6 +7,7 @@ SECTIONS
 	.qizo_pm32 : { *(.qizo_pm32) }
 	.qizo_long64 : { *(.qizo_long64) }
 	.qizo_aux : { *(.qizo_aux) }
+	.qizo_fault : { *(.qizo_fault) }
 	. = ALIGN(512);
 	__qizo_blob_start = .;
 	. = ALIGN(512);

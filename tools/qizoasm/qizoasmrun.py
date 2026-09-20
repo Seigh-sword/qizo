@@ -471,6 +471,14 @@ def main():
             print("qizo: kept %s" % tmp)
             return 1
         print("qizo: stage2 page tables identity map 4 GiB with 2 MiB pages, no reserved bits set")
+        head = real[LY.QIZOK_HDR:LY.QIZOK_HDR + 8]
+        want = bytes.fromhex("b045" "baf8030000" "ee")
+        if head != want:
+            print("qizo: kernel entry opens with %s, expected a COM1 write of its stage marker (%s)"
+                  % (head.hex(" "), want.hex(" ")))
+            print("qizo: kept %s" % tmp)
+            return 1
+        print("qizo: kernel entry writes its marker to COM1 before it touches the stack")
     except HostUnsupported:
         print("qizo: skipping the boot asm test, this host cannot build or run 32 bit code")
         return 0

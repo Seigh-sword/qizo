@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import struct
 import sys
 import zlib
@@ -115,12 +116,23 @@ def stage2_pm32(mem):
         raise SystemExit("model: module magic missing")
     if klen > LY.KERNEL_MAX or total > LY.KERNEL_MAX or entry >= klen:
         raise SystemExit("model: module header out of range")
-    if klen + 64 != len(out):
+    if klen + LY.QIZOK_HDR != len(out):
         raise SystemExit("model: decompressed size mismatch")
-    image = mem.read(LY.SCRATCH + LY.QIZOK_HDR, klen)
+    image = mem.read(LY.SCRATCH + copy_offset(), klen)
     mem.write(LY.KTEXT, image)
     mem.write(LY.KTEXT + klen, b"\0" * (total - klen))
     return klen, entry, total
+
+
+def copy_offset():
+    src = open(os.path.join(LY.ROOT, "boot", "stage2.S")).read()
+    m = re.search(r"addl \$\(([^)]*)\), %esi", src)
+    if not m:
+        m = re.search(r"addl \$(QIZO_QIZOK_HDR[^,]*), %esi", src)
+    if not m:
+        raise SystemExit("model: cannot find where stage2 takes the kernel image from")
+    expr = m.group(1).strip().replace(" ", "+")
+    return eval(expr, dict(LY.LAYOUT))
 
 
 def regions(klen, total):
@@ -130,8 +142,9 @@ def regions(klen, total):
         ("pmstack", LY.PM_STACK - 0x1000, LY.PM_STACK),
         ("bootinfo", LY.QIZO["QIZO_BOOTINFO"], LY.QIZO["QIZO_BOOTINFO"] + LY.BOOTINFO_SIZE),
         ("kernel", LY.KTEXT, LY.KTEXT + max(klen, total)),
-        ("scratch", LY.SCRATCH, LY.SCRATCH + LY.KERNEL_MAX + 64),
-        ("pages", LY.PAGE_PML4, LY.PAGE_PDPT + 2048 * 8),
+        ("scratch", LY.SCRATCH, LY.SCRATCH + LY.KERNEL_MAX + LY.QIZOK_HDR),
+        ("pages", LY.PAGE_PML4, LY.PAGE_PDT + 4 * 0x1000),
+        ("fault idt", LY.IDT_BOOT, LY.IDT_BOOT + 32 * 16),
     ]
 
 

@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import struct
 import sys
 
@@ -74,6 +75,26 @@ def test_layout():
     check("blob chunking covers the span", (LY.BLOB_MAX + 511) // 512 <= 256)
 
 
+def test_boot_sections():
+    for base in ("stage1", "stage2"):
+        src = open(os.path.join(LY.ROOT, "boot", base + ".S")).read()
+        lds = open(os.path.join(LY.ROOT, "boot", base + ".ld")).read()
+        used = set(re.findall(r"\.section\s+(\.qizo_[A-Za-z0-9_]+)", src))
+        placed = set(re.findall(r"^\s*(\.qizo_[A-Za-z0-9_]+)\s*:\s*\{", lds, re.M))
+        check("%s places every section it emits (%s)" % (base, ", ".join(sorted(used - placed)) or "none orphaned"),
+              used <= placed)
+
+
+def test_boot_tables():
+    check("page tables occupy six pages", LY.PAGE_PDT + 4 * 0x1000 == LY.PAGE_PML4 + 0x6000)
+    check("leaf entries carry the page size bit", LY.PT_PAGE & 0x80 != 0)
+    check("directory entries do not", LY.PT_DIR & 0x80 == 0)
+    check("boot fault idt sits above the page tables", LY.IDT_BOOT >= LY.PAGE_PML4 + 0x6000)
+    check("boot fault idt holds 32 gates", LY.IDT_BOOT + 32 * 16 <= 0x40000000)
+    check("page tables are identity mapped by the boot",
+          LY.PAGE_PML4 // 0x200000 < 2048 and LY.IDT_BOOT // 0x200000 < 2048)
+
+
 def test_font():
     rows = qizofont.bitmap(ord("A"))
     check("font glyph rows", len(rows) == qizofont.H)
@@ -86,6 +107,8 @@ if __name__ == "__main__":
     test_lzss()
     test_match_window()
     test_layout()
+    test_boot_sections()
+    test_boot_tables()
     test_font()
     if fails:
         print("qizo: %d test(s) failed: %s" % (len(fails), ", ".join(fails)))
