@@ -448,7 +448,7 @@ ram_done:
 fidt_fill:
 	movl (%esi), %eax
 	andl $0xFFFF, %eax
-	orl $0x00080000, %eax
+	orl $0x00280000, %eax
 	movl %eax, (%edi)
 	movl (%esi), %eax
 	andl $0xFFFF0000, %eax
@@ -775,6 +775,9 @@ fail_c7:
 
 .macro QIZO_FSTUB num
 qizo_fstub_\num:
+.if \num != 8 && \num != 10 && \num != 11 && \num != 12 && \num != 13 && \num != 14 && \num != 17 && \num != 21 && \num != 29 && \num != 30
+	pushq $0
+.endif
 	pushq $\num
 	jmp qizo_fault_common
 .endm
@@ -791,6 +794,8 @@ qizo_fault_common:
 	movq (%rsp), %r9
 	call qizo_fault_hex16
 	movq 8(%rsp), %r9
+	call qizo_fault_hex16
+	movq 16(%rsp), %r9
 	call qizo_fault_hex16
 	movq %cr2, %r9
 	call qizo_fault_hex16

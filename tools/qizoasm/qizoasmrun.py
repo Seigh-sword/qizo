@@ -187,7 +187,7 @@ def fault_report_case(tmp):
     body = body.replace("\tmovq %cr2, %r9", "\tmovq $0xdeadbeef, %r9")
     body = body.replace("\tcli\n", "\tnop\n")
     body = body.replace("\tmovq %cr2, %rdx", "\tmovq $0xdeadbeef, %rdx")
-    tail = body.index("25:")
+    tail = body.index("\n25:\n") + 1
     nxt = body.index("\n\n", tail)
     body = body[:tail] + "\tjmp done" + body[nxt:]
     dump = os.path.join(tmp, "report.txt")
@@ -202,11 +202,12 @@ def fault_report_case(tmp):
         "\tpushq $0x2",
         "\tpushq $0x10",
         "\tpushq $0x100040",
+        "\tpushq $0",
         "\tpushq $13",
         "\tjmp qizo_fault_common",
         "done:",
         "\tleaq outbuf(%rip), %rsi",
-    ] + spill64("fdslot", "outbuf", 64) + [
+    ] + spill64("fdslot", "outbuf", 128) + [
         "\tmovl $60, %eax",
         "\txorl %edi, %edi",
         "\tsyscall",
@@ -225,7 +226,7 @@ def fault_report_case(tmp):
     ])
     assemble_run64(tmp, "report", asm)
     got = open(dump, "rb").read()
-    want = b"F000000000000000D000000000010004000000000DEADBEEF"
+    want = b"F%016X%016X%016X%016X" % (13, 0, 0x100040, 0xDEADBEEF)
     if got.startswith(want):
         return []
     return ["report printed %r, expected %r..." % (got[:len(want)], want)]
@@ -273,8 +274,8 @@ def fault_gates_case(tmp):
     for vec in range(32):
         lo, mid = struct.unpack_from("<II", data, vec * 16)
         want_off = 0x20000 + vec * 16
-        if (lo & 0xFFFF) != (want_off & 0xFFFF) or (lo >> 16) != 0x0008:
-            bad.append("gate %d first word %08x, expected offset %04x with selector 0x0008"
+        if (lo & 0xFFFF) != (want_off & 0xFFFF) or (lo >> 16) != 0x0028:
+            bad.append("gate %d first word %08x, expected offset %04x with selector 0x0028"
                        % (vec, lo, want_off & 0xFFFF))
             break
         if (mid >> 16) != (want_off >> 16) or (mid & 0xFFFF) != 0x8E00:

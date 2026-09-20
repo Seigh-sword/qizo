@@ -292,11 +292,17 @@ needs to live in the image.
 While stage2 hands over, no interrupt descriptor table exists yet, so any
 exception would be a triple fault and the machine would just restart. stage2
 therefore builds a 32 entry idt at `0x307000` for the CPU exceptions and points
-every entry at a stub that prints one line on COM1 and halts:
+every entry at a stub that prints one line on COM1 and halts, 16 upper case hex
+digits per field:
 
 ```
-F<16 hex vector><16 hex faulting rip><16 hex cr2>
+F<vector><error code><faulting rip><cr2>
 ```
+
+Every stub pushes a zero error code first for the exceptions that do not supply
+one, so the frame layout is the same for all 32. The gates load selector
+`0x28`, the 64 bit code segment of the boot gdt: `0x08` is its 32 bit segment,
+and an interrupt frame that enters it does not run the handler at all.
 
 The kernel installs its own table a few instructions later, so this costs one
 page of memory and only lives during the handoff. It is assembled
