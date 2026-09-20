@@ -95,6 +95,13 @@ def test_boot_tables():
           LY.PAGE_PML4 // 0x200000 < 2048 and LY.IDT_BOOT // 0x200000 < 2048)
 
 
+def test_boot_once_routines():
+    main = open(os.path.join(LY.ROOT, "kernel", "main.c")).read()
+    check("kernel main does not rebuild the live page tables", "qizo_paging_setup" not in main)
+    head = open(os.path.join(LY.ROOT, "kernel", "boot64.S")).read()
+    check("the entry code builds them once", head.count("call qizo_paging_setup") == 1)
+
+
 def test_font():
     rows = qizofont.bitmap(ord("A"))
     check("font glyph rows", len(rows) == qizofont.H)
@@ -109,6 +116,7 @@ if __name__ == "__main__":
     test_layout()
     test_boot_sections()
     test_boot_tables()
+    test_boot_once_routines()
     test_font()
     if fails:
         print("qizo: %d test(s) failed: %s" % (len(fails), ", ".join(fails)))

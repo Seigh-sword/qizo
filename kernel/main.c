@@ -202,7 +202,6 @@ void qizo_msr_probe(void)
 void qizo_kernel_main_entry(struct qizo_bootinfo *info)
 {
 	boot = info;
-	qizo_paging_setup();
 	qizo_console_init(info);
 	qizo_printf("qizo %u.%u.%u at %lx\r\n", QIZO_VERSION_MAJOR,
 		    QIZO_VERSION_MINOR, QIZO_VERSION_PATCH, (u64)&qizo_kernel_main_entry);
