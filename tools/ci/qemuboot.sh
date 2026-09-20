@@ -191,7 +191,8 @@ if ! grep -qa "$expect" "$log"; then
 fi
 
 echo "ok" >"$status"
-note "$bytes serial bytes, booted to the shell"
+bootlog=$(head -c 260 "$log" 2>/dev/null | tr '\n\r' '  ' | tr -dc 'A-Za-z0-9 .:,_/=-[]()' | cut -c1-220)
+note "$bytes serial bytes, booted to the shell: $bootlog"
 printf 'qizo: %s booted, %s serial bytes, marker "%s" found\n' \
 	"$image" "$bytes" "$expect"
 exit 0
