@@ -286,3 +286,20 @@ is identity mapped from 0x100000, so `rip` names the function on its own:
 
 and the largest symbol at or below `rip` is where it faulted. No symbol table
 needs to live in the image.
+
+## Kernel entry markers
+
+With a debug build the kernel prints one character to COM1 at each step of its
+own entry path, so a fault that happens before the console is up can still be
+placed. The marker is emitted after the step it names:
+
+| marker | meaning |
+| --- | --- |
+| `E` | `qizo_kernel_entry` reached, still running on the boot page tables |
+| `g` | GDT loaded and the 64 bit code segment reloaded through it |
+| `i` | interrupt descriptor table built and loaded |
+| `p` | new page tables live: `cr3`, `cr4`, `efer`, `cr0` rewritten |
+| `K` | about to jump into `qizo_kmain` with the boot info pointer in `rdi` |
+
+So a trace that ends in `E` but never prints `g` is a fault inside the GDT
+reload, and `Egi` without `p` is a fault in the paging transition.

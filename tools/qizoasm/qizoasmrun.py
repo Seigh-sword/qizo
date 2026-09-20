@@ -64,6 +64,120 @@ def assemble_run(tmp, name, asm):
         raise HostUnsupported(exc)
 
 
+def span(text, stop_at, start_at=None):
+    lines = text.split("\n")
+    start = 0 if start_at is None else next(i for i, l in enumerate(lines) if l.strip() == start_at)
+    stop = next(i for i, l in enumerate(lines) if l.strip() == stop_at)
+    return "\n".join(lines[start:stop]) + "\n"
+
+
+def assemble_run64(tmp, name, asm, objcopy=False):
+    src = os.path.join(tmp, name + ".S")
+    open(src, "w").write(asm)
+    obj = src + ".o"
+    exe = os.path.join(tmp, name)
+    try:
+        subprocess.run(["as", "-o", obj, src], check=True, capture_output=True)
+        subprocess.run(["ld", "-o", exe, obj], check=True, capture_output=True)
+        subprocess.run([exe], check=True, capture_output=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise HostUnsupported(exc)
+    out = subprocess.run(["nm", exe], check=True, capture_output=True)
+    syms = {}
+    for line in out.stdout.decode("utf8", "replace").split("\n"):
+        parts = line.split()
+        if len(parts) == 3:
+            syms[parts[2]] = int(parts[0], 16)
+    return syms
+
+
+def spill64(fd_slot, buf, size):
+    return [
+        "\tleaq apath(%rip), %rdi",
+        "\tmovl $2, %eax",
+        "\tmovl $0x142, %esi",
+        "\tmovl $0644, %edx",
+        "\tsyscall",
+        "\tmovq %rax, " + fd_slot,
+        "\tmovl $1, %eax",
+        "\tmovq " + fd_slot + ", %rdi",
+        "\tleaq " + buf + "(%rip), %rsi",
+        "\tmovl $" + str(size) + ", %edx",
+        "\tsyscall",
+        "\tmovl $3, %eax",
+        "\tmovq " + fd_slot + ", %rdi",
+        "\tsyscall",
+    ]
+
+
+def idt_case(tmp):
+    text = open(os.path.join(ROOT, "kernel", "idt.S")).read()
+    stubs = span(text, "qizo_isr_common:")
+    install = span(text, ".size qizo_idt_install, . - qizo_idt_install",
+                   start_at="qizo_idt_install:")
+    install = install.replace("lidt (%rax)", "nop")
+    dump = os.path.join(tmp, "idt.bin")
+    asm = "\n".join([
+        "\t.code64",
+        "\t.text",
+        "\t.globl _start",
+        "_start:",
+        "\tcall body",
+    ] + spill64("fdslot", "qizo_idt", 256 * 16) + [
+        "\tmovl $60, %eax",
+        "\txorl %edi, %edi",
+        "\tsyscall",
+        stubs.rstrip("\n"),
+        "qizo_isr_common:",
+        "\tret",
+        install.rstrip("\n").replace("qizo_idt_install:", "body:"),
+        "\t.data",
+        "apath:",
+        "\t.asciz \"%s\"" % dump.replace("\\", "\\\\"),
+        "\t.align 8",
+        "fdslot:",
+        "\t.quad 0",
+        "qizo_idt_ptr:",
+        "\t.word 256 * 16 - 1",
+        "\t.quad qizo_idt",
+        "\t.bss",
+        "\t.balign 16",
+        "qizo_idt:",
+        "\t.skip 4096",
+        "",
+    ])
+    open(os.path.join(tmp, "idt.S.src"), "w").write(asm)
+    syms = assemble_run64(tmp, "idt", asm)
+    data = open(dump, "rb").read()
+    if len(data) < 4096:
+        return ["idt dump truncated at %d bytes" % len(data)]
+    bad = []
+    for vec in range(256):
+        gate = data[vec * 16:vec * 16 + 16]
+        off_lo, sel, attr_w, off_mid, off_hi, rsv = struct.unpack_from("<HHHHII", gate, 0)
+        attr = (attr_w >> 8) & 0xFF
+        ist = attr_w & 0x0F
+        off = off_lo | off_mid << 16 | off_hi << 32
+        want_name = "qizo_stub_%d" % vec if vec < 32 else "qizo_irq_%d" % vec
+        want = syms.get(want_name)
+        if want is None:
+            bad.append("gate %d: no stub symbol %s" % (vec, want_name))
+            break
+        if off != want:
+            bad.append("gate %d points at 0x%x, its stub is at 0x%x" % (vec, off, want))
+            break
+        if sel != 0x08:
+            bad.append("gate %d loads selector 0x%x instead of the 64 bit code segment" % (vec, sel))
+            break
+        if attr != 0x8E or ist:
+            bad.append("gate %d has attributes %02x ist %d, expected 8e ist 0" % (vec, attr, ist))
+            break
+        if rsv:
+            bad.append("gate %d has a non zero reserved word" % vec)
+            break
+    return bad
+
+
 def blob_of(img):
     off = LY.g("QIZO_BLOB_LBA") * LY.SECTOR
     end = min(off + LY.g("QIZO_BLOB_MAX"), len(img))
@@ -247,9 +361,20 @@ def main():
             print("qizo: kept %s" % tmp)
             return 1
         print("qizo: stage2 page tables identity map 4 GiB with 2 MiB pages, no reserved bits set")
+    except HostUnsupported:
+        print("qizo: skipping the boot asm test, this host cannot build or run 32 bit code")
+        return 0
+    try:
+        problems = idt_case(tmp)
+        if problems:
+            for line in problems:
+                print("qizo: kernel idt: %s" % line)
+            print("qizo: kept %s" % tmp)
+            return 1
+        print("qizo: kernel idt gates all point at their own stub, selector and type correct")
     except HostUnsupported as exc:
         detail = getattr(exc.args[0], "stderr", b"") or b""
-        print("qizo: skipping the boot asm test, this host cannot build or run 32 bit code (%s %s)"
+        print("qizo: skipping the idt asm test, this host cannot build or run 64 bit harness code (%s %s)"
               % (type(exc).__name__, detail.decode("utf8", "replace").strip()[:80]))
         return 0
     if not args.keep:

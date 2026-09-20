@@ -1,9 +1,14 @@
 .section .qizo_text,"ax"
 .code64
 
+.macro MARK ch
+	movb $\ch, %al
+	call qizo_bootmark
+.endm
+
 .set QIZO_PG_SIZE, 0x6000
 .set QIZO_HHDM_VIRT, 0xFFFF888000000000
-.set QIZO_CR4_BITS, 0x00000370
+.set QIZO_CR4_BITS, 0x00000620
 .set QIZO_EFER, 0xC0000080
 .set QIZO_STACK_BYTES, 32768
 
@@ -12,17 +17,42 @@
 qizo_kernel_entry:
 	cli
 	cld
+	MARK 0x45
 	movq %rdi, %rbx
 	movq $qizo_boot_stack + QIZO_STACK_BYTES, %rsp
 	andq $-16, %rsp
 	xorq %rbp, %rbp
 	call qizo_gdt_install
+	MARK 0x67
 	call qizo_idt_install
+	MARK 0x69
 	call qizo_paging_setup
+	MARK 0x70
 	movq %rbx, %rdi
+	MARK 0x6B
 	call qizo_kmain
 	jmp qizo_hlt_loop
 .size qizo_kernel_entry, . - qizo_kernel_entry
+
+qizo_bootmark:
+	pushq %rcx
+	pushq %rdx
+	pushq %rax
+	movl $0x3FD, %edx
+	movl $20000, %ecx
+1:
+	inb %dx, %al
+	testb $0x20, %al
+	jnz 2f
+	decl %ecx
+	jnz 1b
+2:
+	popq %rax
+	movl $0x3F8, %edx
+	outb %al, %dx
+	popq %rdx
+	popq %rcx
+	ret
 
 .global qizo_paging_setup
 .type qizo_paging_setup, @function
@@ -95,21 +125,7 @@ qizo_paging_setup:
 
 	movq %r9, %rax
 	movq %rax, %cr3
-	pushq %rbx
-	movl $1, %eax
-	xorl %ecx, %ecx
-	cpuid
-	movl $0x620, %r10d
-	testl $0x08, %edx
-	jz 4f
-	orl $0x10, %r10d
-4:
-	testl $0x01, %edx
-	jz 5f
-	orl $0x40, %r10d
-5:
-	popq %rbx
-	movq %r10, %rax
+	movl $QIZO_CR4_BITS, %eax
 	movq %rax, %cr4
 	movl $QIZO_EFER, %ecx
 	rdmsr
