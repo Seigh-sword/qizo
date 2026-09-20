@@ -90,8 +90,14 @@ report() {
 	if [ -n "$rip" ]; then
 		probe_msg="$probe_msg rip=$rip"
 	fi
+	for f in RIP CR2 RSP RAX CR0 CR4; do
+		v=$(grep -aoE "${f}[ =]0x[0-9a-fA-F]+" "$trace" 2>/dev/null | tail -1 | tr -dc '0-9a-f')
+		if [ -n "$v" ]; then
+			probe_msg="$probe_msg ${f}=$(printf '%s' "$v" | sed 's/^0*//')"
+		fi
+	done
 	if [ -s "$log" ]; then
-		hexc=$(head -c 64 "$log" | od -An -tx1 | tr -dc '0-9a-f')
+		hexc=$(head -c 112 "$log" | od -An -tx1 | tr -dc '0-9a-f')
 		if [ -n "$hexc" ]; then
 			probe_msg="$probe_msg hex=$hexc"
 		fi
@@ -139,7 +145,7 @@ timeout "$timeout_s" "$qemu" \
 	-machine pc -m 64 -smp 1 -cpu qemu64 \
 	-display none -monitor none -serial "file:$log" \
 	-no-reboot -no-shutdown \
-	-d int,cpu_reset,guest_errors -D "$trace" \
+	-d int,cpu,cpu_reset,guest_errors -D "$trace" \
 	-debugcon "file:$bios" -global isa-debugcon.iobase=0x402 \
 	"${drive[@]}" 2>"$err" &
 pid=$!
