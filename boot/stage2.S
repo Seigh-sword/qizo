@@ -595,6 +595,7 @@ qizo_decompress:
 	jmp decomp_top
 
 decomp_raw:
+	movl %ecx, %edx
 	addl %edi, %edx
 	xorl %ebp, %ebp
 
@@ -625,12 +626,13 @@ decomp_refill:
 decomp_match:
 	movzwl (%esi), %eax
 	addl $2, %esi
-	movl %eax, %ecx
-	shrl $4, %ecx
-	incl %ecx
+	pushl %eax
+	shrl $4, %eax
+	incl %eax
+	pushl %eax
+	movl 4(%esp), %eax
 	andl $0xF, %eax
 	addl $3, %eax
-	pushl %ecx
 	pushl %eax
 
 decomp_copy:
@@ -641,7 +643,7 @@ decomp_copy:
 	incl %edi
 	decl 0(%esp)
 	jne decomp_copy
-	addl $8, %esp
+	addl $12, %esp
 	jmp decomp_top
 
 decomp_copy_byte:

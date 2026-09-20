@@ -117,6 +117,7 @@ check: $(ART)/qizo.img $(ART)/qizo.iso
 		--stage2 $(BUILD)/boot/stage2.bin --iso $(ART)/qizo.iso
 	$(PYTHON) $(TOOLS)/qizocheck/qizobootmodel.py --image $(ART)/qizo.img \
 		--kernel-bin $(BUILD)/qizo.bin
+	$(PYTHON) $(TOOLS)/qizoasm/qizoasmrun.py --image $(ART)/qizo.img
 
 dist: all
 	cp $(BUILD)/qizo.elf $(ART)/qizo-kernel.elf

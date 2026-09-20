@@ -111,3 +111,24 @@ available, which the workflows read as a skip. It writes `serial-<tag>.log`,
 `qemu-<tag>.err` and `.qizo-boot-<tag>.status`; the annotation lines it prints are
 what shows up in the Actions log when a boot goes wrong. Set `QIZO_BOOT_EXPECT` to
 wait for a different string, `QIZO_BOOT_TIMEOUT` for a different deadline.
+
+## Running the boot code itself on the host
+
+`make check` runs `tools/qizoasm/qizoasmrun.py`, which takes the real
+`qizo_decompress` bytes out of `boot/stage2.S`, wraps them in a 32 bit program
+that decompresses the payload actually sitting in `build/artifacts/qizo.img`,
+and compares the result with `tools/common/qizolzss.py`. It is not a model of
+the boot code: the assembler output is executed on the host CPU, so a decoder
+bug cannot hide behind a reimplementation. Hosts that cannot build or run
+32 bit code report a skip instead of a failure.
+
+Run it on its own while working on the boot decompressor:
+
+```sh
+make all
+python3 tools/qizoasm/qizoasmrun.py --image build/artifacts/qizo.img
+```
+
+The same trick works for any leaf routine in `boot/stage2.S`: extract the
+labels, hand it its inputs in `.data`, and compare against the python tool
+that produced the bytes.
