@@ -441,6 +441,27 @@ ram_done:
 	movl QIZO_BOOTINFO + QIZO_BI_KERNEL_BSS, %ecx
 	call qizo_zero
 
+	movl $qizo_fstub_table, %esi
+	movl $QIZO_IDT_BOOT, %edi
+	movl $32, %ecx
+
+fidt_fill:
+	movl (%esi), %eax
+	andl $0xFFFF, %eax
+	orl $0x00080000, %eax
+	movl %eax, (%edi)
+	movl (%esi), %eax
+	andl $0xFFFF0000, %eax
+	orl $0x8E00, %eax
+	movl %eax, 4(%edi)
+	movl $0, 8(%edi)
+	movl $0, 12(%edi)
+	addl $4, %esi
+	addl $16, %edi
+	decl %ecx
+	jne fidt_fill
+	lidt qizo_fidt_ptr
+
 	call qizo_build_pages
 	movl $0x630, %eax
 	movl %eax, %cr4
@@ -749,4 +770,85 @@ fail_c7:
 	movb $0x1d, QIZO_BOOTINFO + QIZO_BI_ERR
 	jmp fail32_r
 
+.section .qizo_fault,"ax"
+.code64
 
+.macro QIZO_FSTUB num
+qizo_fstub_\num:
+	pushq $\num
+	jmp qizo_fault_common
+.endm
+
+qizo_fault_stubs:
+.irp n, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+	QIZO_FSTUB \n
+.endr
+
+qizo_fault_common:
+	cli
+	movl $0x46, %r8d
+	call qizo_fault_putc
+	movq (%rsp), %r9
+	call qizo_fault_hex16
+	movq 8(%rsp), %r9
+	call qizo_fault_hex16
+	movq %cr2, %r9
+	call qizo_fault_hex16
+
+25:
+	cli
+	hlt
+	jmp 25b
+
+qizo_fault_putc:
+	pushq %rcx
+	pushq %rdx
+	movl $0x3FD, %edx
+	movl $4000000, %ecx
+26:
+	inb %dx, %al
+	testb $0x20, %al
+	jnz 27f
+	decl %ecx
+	jnz 26b
+27:
+	movb %r8b, %al
+	movl $0x3F8, %edx
+	outb %al, %dx
+	popq %rdx
+	popq %rcx
+	ret
+
+qizo_fault_hex16:
+	pushq %rcx
+	pushq %r10
+	movl $60, %r10d
+
+28:
+	movq %r9, %rax
+	movl %r10d, %ecx
+	shrq %cl, %rax
+	andl $15, %eax
+	cmpl $10, %eax
+	jb 29f
+	addl $0x37, %eax
+	jmp 30f
+29:
+	addl $0x30, %eax
+30:
+	movl %eax, %r8d
+	call qizo_fault_putc
+	subl $4, %r10d
+	jns 28b
+	popq %r10
+	popq %rcx
+	ret
+
+qizo_fstub_table:
+.irp n, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+	.long qizo_fstub_\n
+.endr
+
+qizo_fidt_ptr:
+	.word 32 * 16 - 1
+	.long QIZO_IDT_BOOT

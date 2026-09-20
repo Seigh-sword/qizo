@@ -287,6 +287,24 @@ is identity mapped from 0x100000, so `rip` names the function on its own:
 and the largest symbol at or below `rip` is where it faulted. No symbol table
 needs to live in the image.
 
+## Faults before the kernel can report them
+
+While stage2 hands over, no interrupt descriptor table exists yet, so any
+exception would be a triple fault and the machine would just restart. stage2
+therefore builds a 32 entry idt at `0x307000` for the CPU exceptions and points
+every entry at a stub that prints one line on COM1 and halts:
+
+```
+F<16 hex vector><16 hex faulting rip><16 hex cr2>
+```
+
+The kernel installs its own table a few instructions later, so this costs one
+page of memory and only lives during the handoff. It is assembled
+unconditionally: a boot that can describe its own failure is worth more than
+the bytes it takes. `make check` runs the handler and the gate builder on the
+host, with the privileged instructions replaced by memory writes, so the
+reporter itself is tested and not just trusted.
+
 ## Kernel entry markers
 
 With a debug build the kernel prints one character to COM1 at each step of its

@@ -178,6 +178,115 @@ def idt_case(tmp):
     return bad
 
 
+
+def fault_report_case(tmp):
+    src = open(os.path.join(ROOT, "boot", "stage2.S")).read()
+    body = src[src.index(".section .qizo_fault"):].replace(".section .qizo_fault,\"ax\"", "")
+    body = body.replace("\tinb %dx, %al", "\tmovl $0x60, %eax")
+    body = body.replace("\toutb %al, %dx", "\tmovb %al, (%rbx)\n\tincq %rbx")
+    body = body.replace("\tmovq %cr2, %r9", "\tmovq $0xdeadbeef, %r9")
+    body = body.replace("\tcli\n", "\tnop\n")
+    body = body.replace("\tmovq %cr2, %rdx", "\tmovq $0xdeadbeef, %rdx")
+    tail = body.index("25:")
+    nxt = body.index("\n\n", tail)
+    body = body[:tail] + "\tjmp done" + body[nxt:]
+    dump = os.path.join(tmp, "report.txt")
+    asm = "\n".join([
+        "\t.code64",
+        "\t.text",
+        "\t.globl _start",
+        "_start:",
+        "\t.set QIZO_IDT_BOOT, 0x307000",
+        "\tmovabsq $outbuf, %rbx",
+        "\tpushq $done",
+        "\tpushq $0x2",
+        "\tpushq $0x10",
+        "\tpushq $0x100040",
+        "\tpushq $13",
+        "\tjmp qizo_fault_common",
+        "done:",
+        "\tleaq outbuf(%rip), %rsi",
+    ] + spill64("fdslot", "outbuf", 64) + [
+        "\tmovl $60, %eax",
+        "\txorl %edi, %edi",
+        "\tsyscall",
+        body,
+        "\t.data",
+        "apath:",
+        "\t.asciz \"%s\"" % dump.replace("\\", "\\\\"),
+        "\t.align 8",
+        "fdslot:",
+        "\t.quad 0",
+        "\t.bss",
+        "\t.balign 16",
+        "outbuf:",
+        "\t.zero 512",
+        "",
+    ])
+    assemble_run64(tmp, "report", asm)
+    got = open(dump, "rb").read()
+    want = b"F000000000000000D000000000010004000000000DEADBEEF"
+    if got.startswith(want):
+        return []
+    return ["report printed %r, expected %r..." % (got[:len(want)], want)]
+
+
+def fault_gates_case(tmp):
+    src = open(os.path.join(ROOT, "boot", "stage2.S")).read()
+    body = src[src.index("\tmovl $qizo_fstub_table, %esi"):src.index("\tlidt qizo_fidt_ptr")]
+    dump = os.path.join(tmp, "fidt.bin")
+    fake = ["\t.long 0x20000 + %d" % (i * 16) for i in range(32)]
+    asm = "\n".join([
+        "\t.code32",
+        "\t.set QIZO_IDT_BOOT, idtblob",
+        "\t.text",
+        "\t.globl _start",
+        "_start:",
+        "\tnop",
+        body.replace("lidt qizo_fidt_ptr", "nop"),
+    ] + spill("fdslot", "idtblob", "movl $512, %edx") + [
+        "\tmovl $1, %eax",
+        "\txorl %ebx, %ebx",
+        "\tint $0x80",
+        "\t.data",
+        "apath:",
+        "\t.asciz \"%s\"" % dump.replace("\\", "\\\\"),
+        "\t.align 4",
+        "fdslot:",
+        "\t.long 0",
+        "qizo_fstub_table:",
+        "\t" + "\n\t".join(fake),
+        "qizo_fidt_ptr:",
+        "\t.word 32 * 16 - 1",
+        "\t.long QIZO_IDT_BOOT",
+        "\t.bss",
+        "\t.balign 16",
+        "idtblob:",
+        "\t.zero 512",
+        "",
+    ])
+    assemble_run(tmp, "fidt", asm)
+    data = open(dump, "rb").read()
+    bad = []
+    if len(data) < 512:
+        return ["idt dump truncated at %d bytes" % len(data)]
+    for vec in range(32):
+        lo, mid = struct.unpack_from("<II", data, vec * 16)
+        want_off = 0x20000 + vec * 16
+        if (lo & 0xFFFF) != (want_off & 0xFFFF) or (lo >> 16) != 0x0008:
+            bad.append("gate %d first word %08x, expected offset %04x with selector 0x0008"
+                       % (vec, lo, want_off & 0xFFFF))
+            break
+        if (mid >> 16) != (want_off >> 16) or (mid & 0xFFFF) != 0x8E00:
+            bad.append("gate %d second word %08x, expected offset %04x with attributes 8e00"
+                       % (vec, mid, want_off >> 16))
+            break
+        if struct.unpack_from("<II", data, vec * 16 + 8) != (0, 0):
+            bad.append("gate %d has a non zero high half" % vec)
+            break
+    return bad
+
+
 def blob_of(img):
     off = LY.g("QIZO_BLOB_LBA") * LY.SECTOR
     end = min(off + LY.g("QIZO_BLOB_MAX"), len(img))
@@ -372,6 +481,14 @@ def main():
             print("qizo: kept %s" % tmp)
             return 1
         print("qizo: kernel idt gates all point at their own stub, selector and type correct")
+        for label, case in (("report", fault_report_case), ("gate build", fault_gates_case)):
+            problems = case(tmp)
+            if problems:
+                for line in problems:
+                    print("qizo: boot fault %s: %s" % (label, line))
+                print("qizo: kept %s" % tmp)
+                return 1
+            print("qizo: boot fault %s verified" % label)
     except HostUnsupported as exc:
         detail = getattr(exc.args[0], "stderr", b"") or b""
         print("qizo: skipping the idt asm test, this host cannot build or run 64 bit harness code (%s %s)"
