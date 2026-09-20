@@ -117,7 +117,7 @@ bit clear means a literal byte.
 | 0x44000 | stage2 protected mode stack top |
 | 0x100000 | kernel load address (identity mapped, 144 KiB budget) |
 | 0x180000 | decompression scratch |
-| 0x300000 | stage2 page tables (PML4 + PDPT) |
+| 0x300000 | stage2 page tables: PML4, PDPT, then 4 PDT pages (6 pages, 0x6000) |
 
 Nothing may be loaded between 0xA0000 and 0xFFFFF. 0xA0000..0xBFFFF is the planar VGA
 frame buffer and 0xC0000..0xEFFFF is the video BIOS and option ROM shadow, so code placed

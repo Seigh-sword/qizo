@@ -687,25 +687,30 @@ qizo_build_pages:
 	movl $QIZO_PAGE_PML4, %edi
 	movl $0x6000, %ecx
 	call qizo_zero
-	movl $QIZO_PAGE_PML4, %edi
-	movl $4, %ecx
 	movl $QIZO_PAGE_PDPT, %eax
+	orl $QIZO_PT_DIR, %eax
+	movl $QIZO_PAGE_PML4, %edi
+	movl %eax, (%edi)
+	movl $0, 4(%edi)
 
-pml4_fill:
-	movl %eax, %edx
-	orl $QIZO_PT_PAGE, %edx
-	movl %edx, (%edi)
+	movl $QIZO_PAGE_PDT, %eax
+	movl $QIZO_PAGE_PDPT, %edi
+	movl $4, %ecx
+
+pdpt_fill:
+	orl $QIZO_PT_DIR, %eax
+	movl %eax, (%edi)
 	movl $0, 4(%edi)
 	addl $0x1000, %eax
 	addl $8, %edi
 	decl %ecx
-	jne pml4_fill
+	jne pdpt_fill
 
-	movl $QIZO_PAGE_PDPT, %edi
 	xorl %eax, %eax
+	movl $QIZO_PAGE_PDT, %edi
 	movl $2048, %ecx
 
-pdpt_fill:
+pdt_fill:
 	movl %eax, %edx
 	orl $QIZO_PT_PAGE, %edx
 	movl %edx, (%edi)
@@ -713,7 +718,7 @@ pdpt_fill:
 	addl $0x200000, %eax
 	addl $8, %edi
 	decl %ecx
-	jne pdpt_fill
+	jne pdt_fill
 	ret
 
 fail_c1:
