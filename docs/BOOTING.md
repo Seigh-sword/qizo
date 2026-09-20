@@ -341,4 +341,7 @@ nm build/qizo.elf | sort > /tmp/syms
 ```
 
 and look for the largest symbol address below it, or onto the boot blob by
-subtracting `0x20000` and dumping `build/boot/stage2.bin` at that offset.
+subtracting `0x20000` and dumping `build/boot/stage2.bin` at that offset. The
+`dump=` field is the raw tail of that log: the last `check_exception` lines and
+the last cpu state dump, so the fault that ended the run is visible rather than
+whatever the firmware took first.
