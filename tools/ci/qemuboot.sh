@@ -75,6 +75,12 @@ report() {
 	if [ -n "$acode" ]; then
 		probe_msg="$probe_msg code=$acode"
 	fi
+	for f in RIP CR0 CR2 CR3 CR4 EFER; do
+		v=$(grep -am1 -oE "${f}= *[0-9a-f]+" "$trace" 2>/dev/null | tr -dc '0-9a-f' | sed 's/^0*//')
+		if [ -n "$v" ]; then
+			probe_msg="$probe_msg ${f}=$v"
+		fi
+	done
 	tfmt=$(head -1 "$trace" 2>/dev/null | tr -dc 'A-Za-z0-9 =:/._+-' | cut -c1-40)
 	last=$(tail -1 "$trace" 2>/dev/null | tr -dc 'A-Za-z0-9 =:/._+-[]()' | cut -c1-56)
 	resets=$(grep -ac 'CPU Reset' "$trace" 2>/dev/null | head -1)

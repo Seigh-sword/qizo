@@ -327,3 +327,18 @@ placed. The marker is emitted after the step it names:
 
 So a trace that ends in `E` but never prints `g` is a fault inside the GDT
 reload, and `Egi` without `p` is a fault in the paging transition.
+
+## What the boot smoke job prints
+
+`tools/ci/qemuboot.sh` asks qemu for `-d int,cpu_reset,guest_errors`. QEMU logs
+a cpu state dump with every exception it takes, so the annotation carries the
+first `RIP`, `CR0`, `CR2`, `CR3`, `CR4` and `EFER` of the run next to the marker
+trace: `RIP` is the faulting instruction and `CR2` the address a page fault
+tried to reach. Map `RIP` onto the kernel with
+
+```sh
+nm build/qizo.elf | sort > /tmp/syms
+```
+
+and look for the largest symbol address below it, or onto the boot blob by
+subtracting `0x20000` and dumping `build/boot/stage2.bin` at that offset.
